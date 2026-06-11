@@ -21,10 +21,11 @@
   - **帳戶**：淨資產 ＋ 各帳戶餘額（跨月累計）。
   前端用 `google.script.run` 呼叫後端；已移除頂部月份下拉，期間選擇只在統計頁。
 - `src/appsscript.json` — Apps Script 設定檔，非必要勿動（`doGet()` 已加 `setXFrameOptionsMode(ALLOWALL)` 讓 App 可被啟動頁 iframe 嵌入）。
-- `docs/` — GitHub Pages 啟動頁（解決 GAS 無法自訂主畫面圖示的根本辦法）：
-  - `docs/index.html`：全螢幕 iframe 嵌入 App；後台用網址參數 `?app=<exec>` 指定（**一頁服務多人**），沒帶就連維護者預設 exec；只接受 `script.google.com/macros/.../exec`。
-  - `docs/apple-touch-icon.png`：主畫面圖示（咬一口的扁平甜甜圈、無文字、180×180）。**iOS 加到主畫面讀的是啟動頁(最上層)的這顆圖示**——因為 GAS 把 App 包在沙箱 iframe，App 內的 `apple-touch-icon` 傳不到最上層，所以才要這個啟動頁。
-  - 換圖：重畫 PNG 蓋掉 `docs/apple-touch-icon.png`（與 `assets/icon-*.png`）→ `git push` → iPhone 移除舊圖示重新加入主畫面。
+- `docs/` — GitHub Pages 啟動頁（**可選**；只有把 App 設成「任何人可用」時才用得上）：
+  - `docs/index.html`：全螢幕 iframe 嵌入 App，後台一律由網址參數 `?app=<exec>` 指定（公開 repo 內**不寫死**任何人的後台網址）；只接受 `script.google.com/macros/.../exec`。
+  - `docs/apple-touch-icon.png`：啟動頁的主畫面圖示（咬一口扁平甜甜圈、180×180）。原理：GAS 把 App 包在沙箱 iframe，App 內的 `apple-touch-icon` 傳不到最上層，所以靠這個「自己掌握最上層 `<head>`」的啟動頁。
+  - **限制**：私有(「只有我自己」)的 App 在跨網域 iframe 會被第三方 Cookie 擋而回 **403**，所以啟動頁方案**只在 App 設為匿名可用時有效**。
+- **目前選擇＝維持 App 私有**（資料只有自己能開）。所以主畫面圖示改用 **iOS 捷徑 App**（開 `/exec` 並指定自訂圖片），或直接把 `/exec` 加到主畫面接受「記」字。`docs/` 啟動頁/Pages 對私有 App 不適用，留著當「日後若改匿名」的現成選項。
 - `assets/` 圖示原始檔；`README.md` 安裝/更新說明；`update.sh` 朋友的一鍵更新（`git pull && clasp push && clasp deploy`，自動抓自己的部署 ID）。
 
 ## 資料模型

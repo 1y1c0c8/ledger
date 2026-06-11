@@ -27,10 +27,9 @@
     //   例： https://你的帳號.github.io/記帳/?app=https://script.google.com/macros/s/AAA.../exec
     // 沒帶參數時，預設連到維護者(本 repo 擁有者)自己的後台。
     (function () {
-      // 維護者自己的後台（不帶 ?app 時的預設）。朋友請改帶自己的 ?app，不需動這行。
-      var DEFAULT_EXEC = 'https://script.google.com/macros/s/AKfycbwn-cmg2Lv8E80aXT6fIkzeN1BX-uVUsaEMRBMKQTMoCM30CXutZkiFDWRzorPfYAh-jA/exec';
-
-      var app = new URLSearchParams(location.search).get('app') || DEFAULT_EXEC;
+      // 公開 repo 內不寫死任何人的後台網址；後台一律由網址參數 ?app= 指定
+      // （各自把 ?app=<自己的 /exec> 放進自己的主畫面連結裡）。
+      var app = new URLSearchParams(location.search).get('app') || '';
 
       // 安全：只接受 Google Apps Script 的 /exec 網址，避免本頁被拿去嵌任意網站
       var valid = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec(\?.*)?$/.test(app);
