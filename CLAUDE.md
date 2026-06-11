@@ -25,7 +25,10 @@
   - `docs/index.html`：全螢幕 iframe 嵌入 App，後台一律由網址參數 `?app=<exec>` 指定（公開 repo 內**不寫死**任何人的後台網址）；只接受 `script.google.com/macros/.../exec`。
   - `docs/apple-touch-icon.png`：啟動頁的主畫面圖示（咬一口扁平甜甜圈、180×180）。原理：GAS 把 App 包在沙箱 iframe，App 內的 `apple-touch-icon` 傳不到最上層，所以靠這個「自己掌握最上層 `<head>`」的啟動頁。
   - **限制**：私有(「只有我自己」)的 App 在跨網域 iframe 會被第三方 Cookie 擋而回 **403**，所以啟動頁方案**只在 App 設為匿名可用時有效**。
-- **目前選擇＝維持 App 私有**（資料只有自己能開）。所以主畫面圖示改用 **iOS 捷徑 App**（開 `/exec` 並指定自訂圖片），或直接把 `/exec` 加到主畫面接受「記」字。`docs/` 啟動頁/Pages 對私有 App 不適用，留著當「日後若改匿名」的現成選項。
+- **最終選擇＝維持 App 私有 ＋ 直接 PWA**：用 Safari 開 `/exec` → 加入主畫面，得到全螢幕、可用、私有的 App；主畫面圖示是「記」字。
+  - 這是避不掉的**三選二**：私有 GAS App 在「自訂圖示／全螢幕 standalone／私有」最多同時取兩個。圖示要自訂得掌握最上層 `<head>`，但 GAS 私有 App 最上層由 Google 控制（只給設標題＝「記」），塞不進 `apple-touch-icon`。
+  - **iOS 捷徑法試過、不採用**：會強制進瀏覽器、失去全螢幕（且在預設瀏覽器帳號不對時會撞 Google 權限錯誤）。
+  - `docs/` 啟動頁＋`doGet` 的 `ALLOWALL` 是「**日後若把 App 改成匿名可用**」才用得到的現成選項（那時可同時拿到甜甜圈圖示＋全螢幕）；目前對私有 App 停用，但保留不刪。
 - `assets/` 圖示原始檔；`README.md` 安裝/更新說明；`update.sh` 朋友的一鍵更新（`git pull && clasp push && clasp deploy`，自動抓自己的部署 ID）。
 
 ## 資料模型
