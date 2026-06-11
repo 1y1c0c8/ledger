@@ -1,0 +1,7 @@
+{
+  "scriptId": "貼上你自己的 Apps Script scriptId（在 Apps Script → 專案設定 可看到）",
+  "rootDir": "src",
+  "scriptExtensions": [".js", ".gs"],
+  "htmlExtensions": [".html"],
+  "jsonExtensions": [".json"]
+}

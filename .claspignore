@@ -1,0 +1,6 @@
+# clasp 只把「Apps Script 本體」推上 Google；其餘（docs/ 啟動頁、assets/、README…）都不推。
+# rootDir 已設為 src/，所以 docs/、assets/ 本來就在範圍外；這裡再保險把 src/ 內只留 GAS 三檔。
+**/**
+!appsscript.json
+!Code.js
+!Index.html

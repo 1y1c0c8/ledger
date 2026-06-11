@@ -1,0 +1,6 @@
+# clasp 的本機設定含「你自己的 scriptId」與登入憑證 —— 不要提交（這是自架範本，各人用自己的）
+.clasp.json
+.clasprc.json
+
+node_modules/
+.DS_Store

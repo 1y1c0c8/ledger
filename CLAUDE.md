@@ -1,0 +1,61 @@
+# 記帳系統 — 專案說明（給 Claude Code 的常駐脈絡）
+
+## 這是什麼
+個人記帳系統。後端是一份 Google 試算表，前端是部署成「網頁 App」的 Google Apps Script，
+使用者在 iPhone 用「加入主畫面」當 App 開啟。**一個月一張分頁**。
+程式碼以 `src/`(GAS 本體) ＋ `docs/`(GitHub Pages 啟動頁) 結構放在 git repo，是**自架範本**：
+每個人各自部署自己的後台（自己的試算表＋Apps Script），資料互不相通；可共用同一個啟動頁（只決定外框與圖示）。
+
+## 檔案
+- `src/Code.js` — Apps Script 後端：`setup()`、`getConfig()`、`addTransaction()`、`getMonthData()`、
+  `getStats()`、`getBalances()`、`deleteRow()`、`updateRow()`，以及試算表自動排版（`styleConfigSheet_` / `styleMonthSheet_`）。
+  - `getMonthData(month)`：某月交易明細（記帳頁「本月最近」用）。
+  - `getStats(gran, key)`：依 `day`/`week`/`month`/`year` 聚合收入、支出、結餘與該期間明細（統計頁用），回傳 `label`（週會給「起訖日」字串）。分布圓餅改由前端從 `txns` 即時算（可依 支出/收入 × 帳戶 篩選），後端不再回傳 pie。
+  - `weekRange_(dateStr)`：以**週一為一週開始**；給週內任一天，回傳該週起訖日與涵蓋的月份分頁（跨月的週會涵蓋兩張）。
+  - `getBalances()`：各帳戶餘額＋淨資產（帳戶頁用）；底層仍是 `getBalances_()`。
+  - `updateRow(oldMonth, row, t)`：編輯已存紀錄；沿用原「建立時間」；**若日期被改到別的月份會自動把該筆搬到正確月份分頁**。
+  - `readTxns_(sh)`：讀單張月份分頁的交易（getMonthData/getStats 共用）；每筆帶 `sheet` 欄，讓前端能用 `sheet`+`row` 定位編輯/刪除（年/週檢視會跨多張分頁）。
+- `src/Index.html` — 前端 UI（HtmlService）。三個分頁：
+  - **記帳**：交易表單 ＋「本月最近」短清單（點一筆 → 操作選單可編輯/刪除）。
+  - **統計**：`日/週/月/年` ＋ 指定日期/週(選週內一天)/月份/年份 → 收入/支出/結餘、分布圓餅（支出/收入切換、可再依帳戶篩選）、該期間明細（可編輯/刪除）。
+  - **帳戶**：淨資產 ＋ 各帳戶餘額（跨月累計）。
+  前端用 `google.script.run` 呼叫後端；已移除頂部月份下拉，期間選擇只在統計頁。
+- `src/appsscript.json` — Apps Script 設定檔，非必要勿動（`doGet()` 已加 `setXFrameOptionsMode(ALLOWALL)` 讓 App 可被啟動頁 iframe 嵌入）。
+- `docs/` — GitHub Pages 啟動頁（解決 GAS 無法自訂主畫面圖示的根本辦法）：
+  - `docs/index.html`：全螢幕 iframe 嵌入 App；後台用網址參數 `?app=<exec>` 指定（**一頁服務多人**），沒帶就連維護者預設 exec；只接受 `script.google.com/macros/.../exec`。
+  - `docs/apple-touch-icon.png`：主畫面圖示（咬一口的扁平甜甜圈、無文字、180×180）。**iOS 加到主畫面讀的是啟動頁(最上層)的這顆圖示**——因為 GAS 把 App 包在沙箱 iframe，App 內的 `apple-touch-icon` 傳不到最上層，所以才要這個啟動頁。
+  - 換圖：重畫 PNG 蓋掉 `docs/apple-touch-icon.png`（與 `assets/icon-*.png`）→ `git push` → iPhone 移除舊圖示重新加入主畫面。
+- `assets/` 圖示原始檔；`README.md` 安裝/更新說明；`update.sh` 朋友的一鍵更新（`git pull && clasp push && clasp deploy`，自動抓自己的部署 ID）。
+
+## 資料模型
+每筆交易欄位：日期時間、類型(收入/支出/轉帳)、出帳帳戶、入帳帳戶、金額、類別、備註、建立時間。
+- 收入：入帳帳戶＝資產帳戶；出帳留空。
+- 支出：出帳帳戶＝資產或信用卡；入帳留空。
+- 轉帳：出帳 → 入帳。
+- **日期時間**(A欄)：記錄到「分」(前端 `datetime-local`，預設帶當下時刻)，用來分析消費習慣；月份分頁仍依此欄的 `yyyy-MM` 歸屬。改版前的舊資料無時間，顯示為中午 12:00。`parseDate_` 同時吃純日期與含時間字串。
+- **建立時間**(H欄)：系統記錄當下的時間戳，編輯時不會變動，與「日期時間」分開。
+
+帳戶與類別都定義在試算表「設定」分頁（帳戶在 A 欄起、類別在 F 欄起，**資料皆從第 6 列開始**）。
+帳戶類型欄：`資產` / `負債`(信用卡) / `外部`。
+
+## 改程式時必須遵守的規則
+- **信用卡走「帳戶版」**：刷卡＝支出且出帳帳戶＝該卡（卡餘額為負＝未繳）；繳費＝轉帳（銀行→卡）；
+  華南卡家人代繳＝轉帳（外部／他人 → 華南卡）。
+- 餘額是**跨所有月份分頁累計**（含設定分頁的期初餘額）；`外部` 類型不列入淨資產。
+- 月份分頁名稱格式固定為 `YYYY-MM`，`getBalances_` 靠這個 regex 篩選分頁，**不要改這個格式**。
+- 這是 GAS HtmlService 環境，前端**不要用 localStorage / sessionStorage**（也用不到）。
+- UI 維持現有風格：乾淨、中性配色、好按的手機介面，沿用既有 CSS 變數，不要大改視覺方向。
+
+## 標準工作流程（每次改完都要做）——**兩條線都要推**
+1. 改 `src/Code.js` / `src/Index.html`（或 `docs/`）。
+2. **推到 Apps Script（Google）**：`clasp push` →
+   `clasp deploy -i AKfycbwn-cmg2Lv8E80aXT6fIkzeN1BX-uVUsaEMRBMKQTMoCM30CXutZkiFDWRzorPfYAh-jA`
+   （rootDir 已設 `src`，clasp 只推 src/ 三檔；這個是版本化 Web App 部署 ID，另有 `@HEAD` 是測試用，`clasp deployments` 可查。）
+3. **推到 GitHub**：`git push`（GitHub Pages 服務 `docs/` 啟動頁；改 `docs/` 後所有使用者自動更新）。
+- 只動 `docs/`（啟動頁/圖示）→ 只做第 3 步即可。動到 `src/`（App 本體）→ 第 2、3 步都要做。
+
+## 注意
+- `clasp push` 會用本機覆蓋雲端、`clasp pull` 會用雲端覆蓋本機。若曾在 Apps Script 網頁編輯器
+  臨時改過，先 `clasp pull` 再動本機，以免蓋掉雲端的改動。
+- routine 小改用 Sonnet 即可，不用 Opus。
+- 專案擁有者帳號＝ hoffforliving@gmail.com；clasp 已用此帳號登入。

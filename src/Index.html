@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="記帳">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://lh3.googleusercontent.com/d/1-zCLjxsgmUTPvALi-KhluFcNapU-lONw">
+  <link rel="icon" href="data:image/png;base64,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">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f4f3ef; --card:#ffffff; --ink:#1c1b18; --muted:#8a877f;
+      --line:#e7e5de; --accent:#0f766e; --accent-soft:#e3efed;
+      --expense:#c0492f; --income:#2f7d4f; --transfer:#6b6f76;
+      --shadow:0 1px 2px rgba(28,27,24,.05),0 6px 20px rgba(28,27,24,.06);
+      --r:16px;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;background:var(--bg);color:var(--ink);
+      font-family:"Noto Sans TC","Manrope",system-ui,sans-serif;
+      -webkit-font-smoothing:antialiased}
+    body{padding:0 0 96px;max-width:560px;margin:0 auto}
+    .num{font-family:"Manrope",sans-serif;font-variant-numeric:tabular-nums}
+
+    header{position:sticky;top:0;z-index:20;background:rgba(244,243,239,.86);
+      backdrop-filter:saturate(150%) blur(10px);
+      padding:max(14px,env(safe-area-inset-top)) 18px 12px;
+      display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .brand{font-family:"Manrope";font-weight:800;font-size:20px;letter-spacing:-.01em}
+
+    .wrap{padding:6px 16px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+      box-shadow:var(--shadow)}
+
+    /* segmented */
+    .seg{display:flex;background:var(--card);border:1px solid var(--line);
+      border-radius:14px;padding:4px;gap:4px;box-shadow:var(--shadow);margin:8px 0 16px}
+    .seg button{flex:1;border:0;background:transparent;color:var(--muted);
+      padding:11px 0;border-radius:10px;font-size:15px;font-weight:700;
+      font-family:"Noto Sans TC";cursor:pointer;transition:.18s}
+    .seg button[data-on="支出"].active{background:var(--expense);color:#fff}
+    .seg button[data-on="收入"].active{background:var(--income);color:#fff}
+    .seg button[data-on="轉帳"].active{background:var(--transfer);color:#fff}
+    .seg button.active{background:var(--accent-soft);color:var(--accent)} /* 日/月/年等中性切換的預設 active（上面有指定色的會覆蓋此條） */
+
+    .amount-box{padding:18px 18px 6px;text-align:center}
+    .amount-box label{display:block;font-size:13px;color:var(--muted);font-weight:600;margin-bottom:2px}
+    .amount-input{width:100%;border:0;text-align:center;background:transparent;
+      font-family:"Manrope";font-weight:800;font-size:46px;color:var(--ink);
+      letter-spacing:-.02em;outline:none}
+    .amount-input::placeholder{color:#d4d1c8}
+
+    .field{padding:13px 18px;border-top:1px solid var(--line);display:flex;
+      align-items:center;justify-content:space-between;gap:12px}
+    .field label{font-size:14px;color:var(--muted);font-weight:600;white-space:nowrap}
+    .field select,.field input[type=date],.field input[type=datetime-local],.field input[type=month],.field input[type=text]{
+      flex:1;border:0;background:transparent;text-align:right;font-size:16px;
+      color:var(--ink);font-family:inherit;outline:none;-webkit-appearance:none;
+      font-weight:600}
+    .field select{direction:rtl}
+
+    .save{position:fixed;left:0;right:0;bottom:0;z-index:30;
+      padding:12px 16px max(14px,env(safe-area-inset-bottom));
+      background:linear-gradient(transparent,var(--bg) 28%);max-width:560px;margin:0 auto}
+    .save button{width:100%;border:0;border-radius:14px;padding:16px;
+      font-size:17px;font-weight:700;font-family:"Noto Sans TC";color:#fff;
+      background:var(--accent);box-shadow:var(--shadow);cursor:pointer}
+    .save button:active{transform:scale(.99)}
+    .save button:disabled{opacity:.5}
+
+    /* tabs */
+    .tabbar{display:flex;gap:6px;margin:4px 0 10px}
+    .tabbar button{flex:1;border:0;background:transparent;color:var(--muted);
+      font-weight:700;font-size:15px;padding:8px;border-radius:10px;cursor:pointer;
+      font-family:"Noto Sans TC"}
+    .tabbar button.active{background:var(--accent-soft);color:var(--accent)}
+
+    /* list */
+    .row{display:flex;align-items:center;gap:12px;padding:13px 16px;border-top:1px solid var(--line)}
+    .row:first-child{border-top:0}
+    .dot{width:9px;height:9px;border-radius:50%;flex:none}
+    .row .mid{flex:1;min-width:0}
+    .row .t1{font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .row .t2{font-size:12px;color:var(--muted);margin-top:1px}
+    .row .amt{font-family:"Manrope";font-weight:700;font-size:16px;white-space:nowrap}
+
+    /* summary */
+    .sum{display:flex;padding:16px;gap:8px}
+    .sum>div{flex:1;text-align:center}
+    .sum .k{font-size:12px;color:var(--muted);font-weight:600}
+    .sum .v{font-family:"Manrope";font-weight:800;font-size:21px;margin-top:3px}
+
+    .sect-title{font-size:13px;color:var(--muted);font-weight:700;margin:18px 4px 8px}
+    .bal-group{font-size:12px;color:var(--muted);font-weight:700;padding:11px 16px 4px}
+    .networth{padding:14px 16px;display:flex;justify-content:space-between;align-items:baseline}
+    .networth .v{font-family:"Manrope";font-weight:800;font-size:22px}
+
+    canvas{max-width:100%}
+    .chart-wrap{padding:18px}
+    .empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:14px}
+    .hide{display:none!important}
+    .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%) translateY(20px);
+      background:var(--ink);color:#fff;padding:11px 20px;border-radius:999px;font-size:14px;
+      font-weight:600;opacity:0;transition:.25s;z-index:50;pointer-events:none}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .pos{color:var(--income)} .neg{color:var(--expense)}
+
+    /* 可點的清單列 */
+    .row.tap{cursor:pointer}
+    .row.tap:active{background:var(--accent-soft)}
+
+    /* 顯示更多 */
+    .more-btn{border:1px solid var(--line);background:var(--card);border-radius:999px;
+      padding:9px 18px;font-size:14px;font-weight:700;color:var(--accent);
+      font-family:"Noto Sans TC";box-shadow:var(--shadow);cursor:pointer}
+
+    /* 底部彈出層（操作選單 / 編輯小視窗共用） */
+    .overlay{position:fixed;inset:0;z-index:60;background:rgba(28,27,24,.42);
+      display:flex;align-items:flex-end;justify-content:center;
+      opacity:0;pointer-events:none;transition:.2s}
+    .overlay.show{opacity:1;pointer-events:auto}
+    .sheet{background:var(--card);width:100%;max-width:560px;max-height:92vh;overflow:auto;
+      border-radius:20px 20px 0 0;
+      padding:8px 16px max(16px,env(safe-area-inset-bottom));
+      transform:translateY(24px);transition:.2s}
+    .overlay.show .sheet{transform:translateY(0)}
+    .grip{width:38px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 12px}
+    .sheet-title{font-family:"Manrope";font-weight:800;font-size:17px;text-align:center;margin:2px 0 12px}
+    .sheet-sum{text-align:center;padding:2px 0 14px}
+    .sheet-sum .t1{font-weight:700;font-size:16px}
+    .sheet-sum .t2{color:var(--muted);font-size:13px;margin-top:3px}
+    .sheet-btn{width:100%;border:0;border-radius:13px;padding:15px;font-size:16px;
+      font-weight:700;font-family:"Noto Sans TC";margin-top:8px;cursor:pointer}
+    .sheet-btn.edit{background:var(--accent-soft);color:var(--accent)}
+    .sheet-btn.primary{background:var(--accent);color:#fff}
+    .sheet-btn.del{background:var(--expense);color:#fff}
+    .sheet-btn.cancel{background:transparent;color:var(--muted)}
+    .sheet-btn:disabled{opacity:.5}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">記帳</div>
+  </header>
+
+  <div class="wrap">
+    <div class="tabbar">
+      <button id="tabEntry" class="active" onclick="showTab('entry')">記帳</button>
+      <button id="tabStats" onclick="showTab('stats')">統計</button>
+      <button id="tabAcct" onclick="showTab('acct')">帳戶</button>
+    </div>
+
+    <!-- ===== 記帳 ===== -->
+    <section id="viewEntry">
+      <div class="seg" id="typeSeg">
+        <button data-on="支出" class="active" onclick="setType('支出')">支出</button>
+        <button data-on="收入" onclick="setType('收入')">收入</button>
+        <button data-on="轉帳" onclick="setType('轉帳')">轉帳</button>
+      </div>
+
+      <div class="card">
+        <div class="amount-box">
+          <label>金額</label>
+          <input class="amount-input num" id="amount" type="text" inputmode="decimal"
+                 placeholder="0" oninput="cleanAmount(this)">
+        </div>
+        <div class="field hide" id="fOut">
+          <label id="fOutLabel">出帳帳戶</label>
+          <select id="accountOut"></select>
+        </div>
+        <div class="field hide" id="fIn">
+          <label id="fInLabel">入帳帳戶</label>
+          <select id="accountIn"></select>
+        </div>
+        <div class="field" id="fCat">
+          <label>項目類別</label>
+          <select id="category"></select>
+        </div>
+        <div class="field">
+          <label>日期時間</label>
+          <input type="datetime-local" id="date">
+        </div>
+        <div class="field">
+          <label>備註</label>
+          <input type="text" id="note" placeholder="選填" maxlength="60">
+        </div>
+      </div>
+
+      <div class="sect-title">本月最近</div>
+      <div class="card" id="recentList"><div class="empty">尚無紀錄</div></div>
+    </section>
+
+    <!-- ===== 統計 ===== -->
+    <section id="viewStats" class="hide">
+      <!-- 期間：日 / 月 / 年 -->
+      <div class="seg" id="granSeg">
+        <button data-on="day" onclick="setGran('day')">日</button>
+        <button data-on="week" onclick="setGran('week')">週</button>
+        <button data-on="month" class="active" onclick="setGran('month')">月</button>
+        <button data-on="year" onclick="setGran('year')">年</button>
+      </div>
+      <div class="card field" id="pickerField" style="border-top:0;border-radius:var(--r);margin-bottom:10px">
+        <label id="pickerLabel">月份</label>
+        <span id="pickerSlot" style="flex:1;text-align:right"></span>
+      </div>
+
+      <div class="card sum">
+        <div><div class="k">收入</div><div class="v pos num" id="sumIn">0</div></div>
+        <div><div class="k">支出</div><div class="v neg num" id="sumOut">0</div></div>
+        <div><div class="k">結餘</div><div class="v num" id="sumNet">0</div></div>
+      </div>
+
+      <div class="sect-title">分布</div>
+      <div class="tabbar" id="pieKindTabs" style="margin:0 0 6px">
+        <button class="active" data-kind="支出" onclick="setPieKind('支出')">支出</button>
+        <button data-kind="收入" onclick="setPieKind('收入')">收入</button>
+      </div>
+      <div class="card field" id="pieAcctField" style="border-top:0;border-radius:var(--r);margin:0 0 8px">
+        <label>帳戶</label>
+        <select id="pieAcct"></select>
+      </div>
+      <div class="card chart-wrap" id="pieCard">
+        <canvas id="pie" height="220"></canvas>
+      </div>
+
+      <div class="sect-title" id="statListTitle">明細</div>
+      <div class="card" id="statList"><div class="empty">—</div></div>
+      <div id="statMoreWrap" class="hide" style="text-align:center;margin-top:12px">
+        <button class="more-btn" onclick="statShowMore()">顯示更多</button>
+      </div>
+    </section>
+
+    <!-- ===== 帳戶 ===== -->
+    <section id="viewAcct" class="hide">
+      <div class="card networth">
+        <span style="font-weight:700">淨資產</span>
+        <span class="v num" id="networth">0</span>
+      </div>
+      <div class="sect-title">帳戶餘額</div>
+      <div class="card" id="balanceList"><div class="empty">—</div></div>
+    </section>
+  </div>
+
+  <div class="save" id="saveBar">
+    <button id="saveBtn" onclick="save()">儲存</button>
+  </div>
+
+  <!-- ===== 點一筆 → 操作選單 ===== -->
+  <div class="overlay" id="actionSheet" onclick="if(event.target===this)closeSheets()">
+    <div class="sheet">
+      <div class="grip"></div>
+      <div class="sheet-sum" id="actionSum"></div>
+      <button class="sheet-btn edit" onclick="openEdit()">編輯</button>
+      <button class="sheet-btn del" onclick="doDelete()">刪除</button>
+      <button class="sheet-btn cancel" onclick="closeSheets()">取消</button>
+    </div>
+  </div>
+
+  <!-- ===== 編輯小視窗 ===== -->
+  <div class="overlay" id="editModal" onclick="if(event.target===this)closeSheets()">
+    <div class="sheet">
+      <div class="grip"></div>
+      <div class="sheet-title">編輯紀錄</div>
+      <div class="seg" id="eTypeSeg" style="margin-top:0">
+        <button data-on="支出" onclick="setEditType('支出')">支出</button>
+        <button data-on="收入" onclick="setEditType('收入')">收入</button>
+        <button data-on="轉帳" onclick="setEditType('轉帳')">轉帳</button>
+      </div>
+      <div class="card">
+        <div class="amount-box">
+          <label>金額</label>
+          <input class="amount-input num" id="eAmount" type="text" inputmode="decimal"
+                 placeholder="0" oninput="cleanAmount(this)">
+        </div>
+        <div class="field hide" id="eFOut">
+          <label id="eFOutLabel">出帳帳戶</label>
+          <select id="eAccountOut"></select>
+        </div>
+        <div class="field hide" id="eFIn">
+          <label id="eFInLabel">入帳帳戶</label>
+          <select id="eAccountIn"></select>
+        </div>
+        <div class="field" id="eFCat">
+          <label>項目類別</label>
+          <select id="eCategory"></select>
+        </div>
+        <div class="field">
+          <label>日期時間</label>
+          <input type="datetime-local" id="eDate">
+        </div>
+        <div class="field">
+          <label>備註</label>
+          <input type="text" id="eNote" placeholder="選填" maxlength="60">
+        </div>
+      </div>
+      <button class="sheet-btn primary" id="eSaveBtn" onclick="saveEdit()">更新</button>
+      <button class="sheet-btn cancel" onclick="closeSheets()">取消</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    let CONFIG = null, TYPE = '支出', pieChart = null;
+    let ENTRYMONTH = null;                 // 記帳頁固定看當月
+    let LASTENTRY = null, STAT = null, BAL = null, EDITING = null;
+    let GRAN = 'month', STATKEY = null, PIEKIND = '支出', PIEACCT = '__all__';
+    const PAGE = 15;                       // 統計明細一次顯示筆數
+    let statShown = PAGE;
+    const ENTRY_RECENT = 8;                // 記帳頁「本月最近」顯示筆數
+    const $ = id => document.getElementById(id);
+    const fmt = n => (n<0?'-':'') + '$' + Math.abs(Math.round(n)).toLocaleString('en-US');
+
+    function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');
+      setTimeout(()=>t.classList.remove('show'),1600);}
+
+    function cleanAmount(el){el.value = el.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1');}
+
+    // 給 datetime-local 用的「現在」字串：yyyy-MM-ddTHH:mm（當地時間）
+    function nowLocalDT(){
+      const d=new Date(), p=n=>String(n).padStart(2,'0');
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    // 初始化
+    google.script.run.withSuccessHandler(onConfig).withFailureHandler(err).getConfig();
+
+    function onConfig(cfg){
+      CONFIG = cfg;
+      ENTRYMONTH = cfg.currentMonth;
+      STATKEY = cfg.currentMonth;        // 統計預設：本月
+      $('date').value = nowLocalDT();
+      setType('支出');
+      buildPieAcct();
+      $('pieAcct').onchange = ()=>{ PIEACCT = $('pieAcct').value; redrawPie(); };
+      loadEntry();
+    }
+
+    function opts(arr){return arr.map(a=>`<option value="${a.name}">${a.name}</option>`).join('');}
+
+    function setType(t){
+      TYPE = t;
+      document.querySelectorAll('#typeSeg button').forEach(b=>
+        b.classList.toggle('active', b.dataset.on===t));
+      const assets = CONFIG.accounts.filter(a=>a.type==='資產');
+      const payFrom = CONFIG.accounts.filter(a=>a.type==='資產'||a.type==='負債'); // 含信用卡
+      const allReal = CONFIG.accounts; // 轉帳可含「外部／他人」(家人代繳)
+
+      if(t==='支出'){
+        show('fOut',true); show('fIn',false); show('fCat',true);
+        $('fOutLabel').textContent='出帳帳戶（誰付的）';
+        $('accountOut').innerHTML = opts(payFrom);
+        $('category').innerHTML = opts(CONFIG.categories.filter(c=>c.kind==='支出'));
+      } else if(t==='收入'){
+        show('fOut',false); show('fIn',true); show('fCat',true);
+        $('fInLabel').textContent='入帳帳戶（進到哪）';
+        $('accountIn').innerHTML = opts(assets);
+        $('category').innerHTML = opts(CONFIG.categories.filter(c=>c.kind==='收入'));
+      } else {
+        show('fOut',true); show('fIn',true); show('fCat',false);
+        $('fOutLabel').textContent='從';
+        $('fInLabel').textContent='到';
+        $('accountOut').innerHTML = opts(allReal);
+        $('accountIn').innerHTML = opts(allReal);
+      }
+    }
+    function show(id,on){$(id).classList.toggle('hide',!on);}
+
+    function save(){
+      const amt = parseFloat($('amount').value);
+      if(!(amt>0)){toast('請輸入金額');return;}
+      if(TYPE==='轉帳' && $('accountOut').value===$('accountIn').value){
+        toast('轉出與轉入不能相同');return;}
+      $('saveBtn').disabled=true; $('saveBtn').textContent='儲存中…';
+      const t = {
+        type:TYPE, amount:amt, date:$('date').value, note:$('note').value,
+        accountOut: (TYPE==='收入')?'':$('accountOut').value,
+        accountIn:  (TYPE==='支出')?'':$('accountIn').value,
+        category:   (TYPE==='轉帳')?'轉帳':$('category').value
+      };
+      google.script.run.withSuccessHandler(()=>{
+        $('amount').value=''; $('note').value=''; $('date').value=nowLocalDT();
+        $('saveBtn').disabled=false; $('saveBtn').textContent='儲存';
+        toast('已記錄 ✓'); reloadAll();
+      }).withFailureHandler(e=>{
+        $('saveBtn').disabled=false; $('saveBtn').textContent='儲存'; err(e);
+      }).addTransaction(t);
+    }
+
+    const TYPE_COLOR = {'支出':'var(--expense)','收入':'var(--income)','轉帳':'var(--transfer)'};
+
+    // 一筆紀錄的列 HTML（記帳「本月最近」與統計「明細」共用）
+    function rowHtml(t){
+      const sign = t.type==='收入'?'+':(t.type==='支出'?'-':'');
+      const label = t.type==='轉帳' ? `${t.accountOut} → ${t.accountIn}` : (t.category || t.type);
+      const sub = (t.note? t.note+' · ':'') + (t.type==='收入'?t.accountIn:(t.type==='支出'?t.accountOut:'轉帳'));
+      return `<div class="row tap" onclick="openActions('${t.sheet}',${t.row})">
+        <span class="dot" style="background:${TYPE_COLOR[t.type]}"></span>
+        <div class="mid"><div class="t1">${label}</div><div class="t2">${t.date.slice(5)} ${t.time} · ${sub}</div></div>
+        <div class="amt num" style="color:${t.type==='轉帳'?'var(--ink)':TYPE_COLOR[t.type]}">${sign}${fmt(t.amount)}</div>
+      </div>`;
+    }
+
+    // ---- 記帳頁：本月最近 ----
+    function loadEntry(){
+      google.script.run.withSuccessHandler(d=>{ LASTENTRY=d; renderEntryList(); })
+        .withFailureHandler(err).getMonthData(ENTRYMONTH);
+    }
+    function renderEntryList(){
+      const d = LASTENTRY, list = $('recentList');
+      if(!d || !d.txns.length){ list.innerHTML='<div class="empty">本月尚無紀錄</div>'; return; }
+      list.innerHTML = d.txns.slice(0, ENTRY_RECENT).map(rowHtml).join('');
+    }
+
+    // ---- 統計頁：日 / 月 / 年 ----
+    function setGran(g){
+      GRAN = g; statShown = PAGE;
+      document.querySelectorAll('#granSeg button').forEach(b=>b.classList.toggle('active', b.dataset.on===g));
+      const now = new Date(), p = n=>String(n).padStart(2,'0');
+      const todayStr = `${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())}`;
+      const slot = $('pickerSlot'), lbl = $('pickerLabel');
+      if(g==='day'){
+        lbl.textContent='日期';
+        if(!STATKEY || STATKEY.length!==10) STATKEY = todayStr;
+        slot.innerHTML = `<input type="date" id="statPicker" value="${STATKEY}">`;
+      } else if(g==='week'){
+        lbl.textContent='週（選週內任一天）';
+        if(!STATKEY || STATKEY.length!==10) STATKEY = todayStr;   // 與「日」共用日期選擇器，後端以週一為週首換算整週
+        slot.innerHTML = `<input type="date" id="statPicker" value="${STATKEY}">`;
+      } else if(g==='month'){
+        lbl.textContent='月份';
+        if(!STATKEY || STATKEY.length!==7) STATKEY = `${now.getFullYear()}-${p(now.getMonth()+1)}`;
+        slot.innerHTML = `<input type="month" id="statPicker" value="${STATKEY}">`;
+      } else {
+        lbl.textContent='年份';
+        const years = statYears();
+        if(!STATKEY || STATKEY.length!==4) STATKEY = String(now.getFullYear());
+        if(years.indexOf(STATKEY)===-1) years.unshift(STATKEY);
+        slot.innerHTML = `<select id="statPicker">${years.map(y=>`<option value="${y}"${y===STATKEY?' selected':''}>${y}</option>`).join('')}</select>`;
+      }
+      $('statPicker').onchange = ()=>{ STATKEY = $('statPicker').value; statShown = PAGE; loadStats(); };
+      loadStats();
+    }
+    function statYears(){
+      const set = {};
+      (CONFIG ? CONFIG.months : []).forEach(m=>set[m.slice(0,4)]=1);
+      return Object.keys(set).sort().reverse();
+    }
+    function loadStats(){
+      google.script.run.withSuccessHandler(d=>{ STAT=d; renderStatSummary(); renderStatList(); })
+        .withFailureHandler(err).getStats(GRAN, STATKEY);
+    }
+    function renderStatSummary(){
+      const d = STAT;
+      $('sumIn').textContent = fmt(d.income);
+      $('sumOut').textContent = fmt(d.expense);
+      const net = $('sumNet'); net.textContent = fmt(d.net);
+      net.className = 'v num ' + (d.net>=0?'pos':'neg');
+      redrawPie();
+    }
+    function setPieKind(k){
+      PIEKIND = k;
+      document.querySelectorAll('#pieKindTabs button').forEach(b=>b.classList.toggle('active', b.dataset.kind===k));
+      buildPieAcct();     // 帳戶清單依支出(出帳)/收入(入帳)改變
+      redrawPie();
+    }
+
+    // 帳戶下拉：支出看「出帳帳戶」、收入看「入帳帳戶」；保留原選擇否則回到全部
+    function buildPieAcct(){
+      if(!CONFIG) return;
+      const list = PIEKIND==='支出'
+        ? CONFIG.accounts.filter(a=>a.type==='資產'||a.type==='負債')
+        : CONFIG.accounts.filter(a=>a.type==='資產');
+      $('pieAcct').innerHTML = ['<option value="__all__">所有帳戶</option>']
+        .concat(list.map(a=>`<option value="${a.name}">${a.name}</option>`)).join('');
+      if(PIEACCT!=='__all__' && list.some(a=>a.name===PIEACCT)) $('pieAcct').value = PIEACCT;
+      else { PIEACCT='__all__'; $('pieAcct').value='__all__'; }
+    }
+
+    // 從 STAT.txns 即時算分布（依 支出/收入 與 選定帳戶 篩選）
+    function computePie(){
+      if(!STAT) return [];
+      const byCat = {};
+      STAT.txns.forEach(t=>{
+        if(t.type!==PIEKIND) return;
+        const acct = PIEKIND==='支出' ? t.accountOut : t.accountIn;
+        if(PIEACCT!=='__all__' && acct!==PIEACCT) return;
+        const c = t.category || '未分類';
+        byCat[c] = (byCat[c]||0) + t.amount;
+      });
+      return Object.keys(byCat).map(k=>({label:k,value:byCat[k]})).sort((a,b)=>b.value-a.value);
+    }
+    function redrawPie(){ drawPie(computePie()); }
+    function renderStatList(){
+      const d = STAT, list = $('statList'), moreWrap = $('statMoreWrap');
+      $('statListTitle').textContent = (d.label || STATKEY) + ' 明細';
+      if(!d.txns.length){ list.innerHTML='<div class="empty">這段期間沒有紀錄</div>'; moreWrap.classList.add('hide'); return; }
+      list.innerHTML = d.txns.slice(0, statShown).map(rowHtml).join('');
+      const rest = d.txns.length - statShown;
+      if(rest>0){ moreWrap.querySelector('button').textContent = `顯示更多（剩 ${rest} 筆）`; moreWrap.classList.remove('hide'); }
+      else moreWrap.classList.add('hide');
+    }
+    function statShowMore(){ statShown += PAGE; renderStatList(); }
+
+    // ---- 帳戶頁 ----
+    function loadBalances(){
+      google.script.run.withSuccessHandler(d=>{ BAL=d; renderBalances(); })
+        .withFailureHandler(err).getBalances();
+    }
+    function renderBalances(){
+      const d = BAL;
+      $('balanceList').innerHTML = d.balances.map(b=>{
+        const owed = b.type==='負債';
+        const shown = owed ? -b.balance : b.balance;   // 信用卡顯示「未繳」
+        return `<div class="row"><div class="mid">
+            <div class="t1">${b.name}</div><div class="t2">${b.group}${owed?' · 未繳':''}</div></div>
+          <div class="amt num" style="color:${owed&&shown>0?'var(--expense)':'var(--ink)'}">${fmt(shown)}</div></div>`;
+      }).join('') || '<div class="empty">—</div>';
+      $('networth').textContent = fmt(d.networth);
+    }
+
+    // 任一筆變動（新增/編輯/刪除）後，刷新已載入過的各頁
+    function reloadAll(){
+      loadEntry();
+      if(STAT) loadStats();
+      if(BAL) loadBalances();
+    }
+
+    function drawPie(pie){
+      if(!pie || !pie.length){
+        if(pieChart){pieChart.destroy();pieChart=null;}
+        $('pieCard').innerHTML='<div class="empty">這段期間沒有'+PIEKIND+'</div>'; return;
+      }
+      if(!document.getElementById('pie')){
+        $('pieCard').innerHTML='<canvas id="pie" height="220"></canvas>';
+        if(pieChart){pieChart.destroy();pieChart=null;}
+      }
+      const palette=['#0f766e','#c0492f','#d98a3d','#5b7fb5','#8a6fb0','#4f9d69','#b5577d','#7d7468','#3da3a3','#c2a04a'];
+      const data={labels:pie.map(p=>p.label),datasets:[{data:pie.map(p=>p.value),
+        backgroundColor:palette,borderWidth:2,borderColor:'#fff'}]};
+      if(pieChart){pieChart.data=data;pieChart.update();return;}
+      pieChart=new Chart($('pie'),{type:'doughnut',data,options:{
+        cutout:'58%',plugins:{legend:{position:'bottom',
+          labels:{font:{family:'Noto Sans TC',size:12},padding:12,boxWidth:12,usePointStyle:true}},
+          tooltip:{callbacks:{label:c=>` ${c.label}　$${c.parsed.toLocaleString()}`}}}}});
+    }
+
+    // ===== 點一筆 → 操作選單 =====
+    // 紀錄可能來自記帳的本月最近，或統計的期間明細；用 sheet+row 定位（row 在不同分頁會重複）
+    function findTxn(sheet, row){
+      for(const pool of [LASTENTRY && LASTENTRY.txns, STAT && STAT.txns]){
+        if(pool){ const t = pool.find(x=>x.sheet===sheet && x.row===row); if(t) return t; }
+      }
+      return null;
+    }
+
+    function openActions(sheet, row){
+      const t = findTxn(sheet, row); if(!t) return;
+      EDITING = t;
+      const sign = t.type==='收入'?'+':(t.type==='支出'?'-':'');
+      const label = t.type==='轉帳' ? `${t.accountOut} → ${t.accountIn}` : (t.category || t.type);
+      const where = t.type==='收入'?t.accountIn:(t.type==='支出'?t.accountOut:'轉帳');
+      $('actionSum').innerHTML =
+        `<div class="t1">${label}　<span style="color:${t.type==='轉帳'?'var(--ink)':TYPE_COLOR[t.type]}">${sign}${fmt(t.amount)}</span></div>
+         <div class="t2">${t.date} ${t.time} · ${where}${t.note? ' · '+t.note : ''}</div>`;
+      $('actionSheet').classList.add('show');
+    }
+
+    function closeSheets(){
+      $('actionSheet').classList.remove('show');
+      $('editModal').classList.remove('show');
+    }
+
+    function doDelete(){
+      const t = EDITING; if(!t) return;
+      if(!confirm('刪除這筆紀錄？')) return;
+      google.script.run.withSuccessHandler(()=>{ closeSheets(); toast('已刪除'); reloadAll(); })
+        .withFailureHandler(err).deleteRow(t.sheet, t.row);
+    }
+
+    // ===== 編輯小視窗 =====
+    function setEditType(t){
+      $('eTypeSeg').dataset.type = t;
+      document.querySelectorAll('#eTypeSeg button').forEach(b=>
+        b.classList.toggle('active', b.dataset.on===t));
+      const assets  = CONFIG.accounts.filter(a=>a.type==='資產');
+      const payFrom = CONFIG.accounts.filter(a=>a.type==='資產'||a.type==='負債');
+      const allReal = CONFIG.accounts;
+      if(t==='支出'){
+        show('eFOut',true); show('eFIn',false); show('eFCat',true);
+        $('eFOutLabel').textContent='出帳帳戶（誰付的）';
+        $('eAccountOut').innerHTML = opts(payFrom);
+        $('eCategory').innerHTML = opts(CONFIG.categories.filter(c=>c.kind==='支出'));
+      } else if(t==='收入'){
+        show('eFOut',false); show('eFIn',true); show('eFCat',true);
+        $('eFInLabel').textContent='入帳帳戶（進到哪）';
+        $('eAccountIn').innerHTML = opts(assets);
+        $('eCategory').innerHTML = opts(CONFIG.categories.filter(c=>c.kind==='收入'));
+      } else {
+        show('eFOut',true); show('eFIn',true); show('eFCat',false);
+        $('eFOutLabel').textContent='從'; $('eFInLabel').textContent='到';
+        $('eAccountOut').innerHTML = opts(allReal);
+        $('eAccountIn').innerHTML = opts(allReal);
+      }
+    }
+
+    function openEdit(){
+      const t = EDITING; if(!t) return;
+      $('actionSheet').classList.remove('show');
+      setEditType(t.type);                        // 先依類型建好欄位，再帶入原值
+      $('eAmount').value = t.amount;
+      $('eDate').value   = t.dt;                  // 'yyyy-MM-ddTHH:mm'
+      $('eNote').value   = t.note || '';
+      if(t.type!=='收入') $('eAccountOut').value = t.accountOut;
+      if(t.type!=='支出') $('eAccountIn').value  = t.accountIn;
+      if(t.type!=='轉帳') $('eCategory').value   = t.category;
+      $('editModal').classList.add('show');
+    }
+
+    function saveEdit(){
+      const t = EDITING; if(!t) return;
+      const type = $('eTypeSeg').dataset.type;
+      const amt = parseFloat($('eAmount').value);
+      if(!(amt>0)){ toast('請輸入金額'); return; }
+      if(type==='轉帳' && $('eAccountOut').value===$('eAccountIn').value){
+        toast('轉出與轉入不能相同'); return; }
+      $('eSaveBtn').disabled=true; $('eSaveBtn').textContent='更新中…';
+      const payload = {
+        type:type, amount:amt, date:$('eDate').value, note:$('eNote').value,
+        accountOut: (type==='收入')?'':$('eAccountOut').value,
+        accountIn:  (type==='支出')?'':$('eAccountIn').value,
+        category:   (type==='轉帳')?'轉帳':$('eCategory').value
+      };
+      google.script.run.withSuccessHandler(()=>{
+        $('eSaveBtn').disabled=false; $('eSaveBtn').textContent='更新';
+        closeSheets(); toast('已更新 ✓'); reloadAll();
+      }).withFailureHandler(e=>{
+        $('eSaveBtn').disabled=false; $('eSaveBtn').textContent='更新'; err(e);
+      }).updateRow(t.sheet, t.row, payload);
+    }
+
+    function showTab(v){
+      $('viewEntry').classList.toggle('hide', v!=='entry');
+      $('viewStats').classList.toggle('hide', v!=='stats');
+      $('viewAcct').classList.toggle('hide', v!=='acct');
+      $('saveBar').classList.toggle('hide', v!=='entry');
+      $('tabEntry').classList.toggle('active', v==='entry');
+      $('tabStats').classList.toggle('active', v==='stats');
+      $('tabAcct').classList.toggle('active', v==='acct');
+      if(v==='stats' && !STAT) setGran('month');   // 首次進統計：建立選擇器並載入
+      if(v==='acct') loadBalances();               // 餘額會變，每次切入都刷新
+    }
+
+    function err(e){toast('發生錯誤：'+(e&&e.message?e.message:e));}
+  </script>
+</body>
+</html>

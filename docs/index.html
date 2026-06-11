@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>記帳</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <!-- 這一頁是「啟動頁」：iOS 加到主畫面時讀的是這裡的 apple-touch-icon（同源），
+       所以圖示才自訂得了；真正的 App 用全螢幕 iframe 嵌進來。 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="記帳">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" href="apple-touch-icon.png">
+  <style>
+    html,body{margin:0;height:100%;background:#0f766e;overflow:hidden}
+    #app{position:fixed;inset:0;width:100%;height:100%;border:0}
+    .msg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+      padding:28px;text-align:center;color:#fff;line-height:1.8;
+      font-family:system-ui,"Noto Sans TC",sans-serif;font-size:15px}
+    .msg code{background:rgba(255,255,255,.16);padding:2px 6px;border-radius:6px;word-break:break-all}
+  </style>
+</head>
+<body>
+  <script>
+    // ── 一頁服務多人 ──
+    // 後台用網址參數指定：  本頁網址/?app=<你的 GAS /exec 網址>
+    //   例： https://你的帳號.github.io/記帳/?app=https://script.google.com/macros/s/AAA.../exec
+    // 沒帶參數時，預設連到維護者(本 repo 擁有者)自己的後台。
+    (function () {
+      // 維護者自己的後台（不帶 ?app 時的預設）。朋友請改帶自己的 ?app，不需動這行。
+      var DEFAULT_EXEC = 'https://script.google.com/macros/s/AKfycbwn-cmg2Lv8E80aXT6fIkzeN1BX-uVUsaEMRBMKQTMoCM30CXutZkiFDWRzorPfYAh-jA/exec';
+
+      var app = new URLSearchParams(location.search).get('app') || DEFAULT_EXEC;
+
+      // 安全：只接受 Google Apps Script 的 /exec 網址，避免本頁被拿去嵌任意網站
+      var valid = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec(\?.*)?$/.test(app);
+
+      if (valid) {
+        var f = document.createElement('iframe');
+        f.id = 'app';
+        f.src = app;
+        f.setAttribute('allow', 'clipboard-read; clipboard-write');
+        document.body.appendChild(f);
+      } else {
+        document.body.innerHTML =
+          '<div class="msg">請在本頁網址後面加上你的記帳後台：<br><br>' +
+          '<code>?app=https://script.google.com/macros/s/…/exec</code><br><br>' +
+          '（必須是 Apps Script 的 <code>/exec</code> 網址）</div>';
+      }
+    })();
+  </script>
+</body>
+</html>
