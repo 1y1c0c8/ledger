@@ -6,7 +6,8 @@
 
 const TZ = 'Asia/Taipei';
 const CFG_SHEET = '設定';
-const TXN_HEADERS = ['日期', '類型', '出帳帳戶', '入帳帳戶', '金額', '類別', '備註', '建立時間'];
+const TXN_HEADERS = ['日期', '類型', '出帳帳戶', '入帳帳戶', '金額', '類別', '備註', '建立時間', '家裡負擔%'];
+const CREATED_COL = 8;   // 「建立時間」固定在第 8 欄（不可用 TXN_HEADERS.length，加欄後會跑掉）
 
 const COLORS = {
   header:'#0f766e', headerText:'#ffffff', section:'#e3efed', sectionText:'#0b5c55',
@@ -175,7 +176,7 @@ function styleMonthSheet_(sh) {
   sh.setFrozenColumns(1);
 
   // 欄寬
-  const W = [130, 64, 110, 110, 100, 90, 220, 140];
+  const W = [130, 64, 110, 110, 100, 90, 220, 140, 80];
   W.forEach((w, i) => sh.setColumnWidth(i + 1, w));
 
   // 格式
@@ -185,7 +186,7 @@ function styleMonthSheet_(sh) {
   sh.getRange('B2:B').setHorizontalAlignment('center');
 
   // 斑馬紋（不蓋到表頭）
-  sh.getRange('A2:H2000').applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+  sh.getRange('A2:I2000').applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
 
   // 用顏色標示交易類型
   const rule = (t, bg, fg) => SpreadsheetApp.newConditionalFormatRule()
@@ -197,7 +198,7 @@ function styleMonthSheet_(sh) {
     rule('轉帳', COLORS.transferBg, COLORS.transferFg)
   ]);
 
-  sh.getRange('A1:H2000').setFontFamily('Noto Sans TC');
+  sh.getRange('A1:I2000').setFontFamily('Noto Sans TC');
 }
 
 /** 給前端：帳戶、類別、可用月份 */
@@ -244,7 +245,8 @@ function addTransaction(t) {
     amt,
     t.category || (t.type === '轉帳' ? '轉帳' : ''),
     t.note || '',
-    new Date()
+    new Date(),
+    famPct_(t)               // 家裡負擔%（只對刷卡支出有意義，其餘留空）
   ]);
   return { ok: true, month: month };
 }
@@ -267,9 +269,15 @@ function readTxns_(sh) {
       accountIn: r[3],
       amount: Number(r[4]) || 0,
       category: r[5],
-      note: r[6]
+      note: r[6],
+      famPct: (r[8] === '' || r[8] == null) ? null : Number(r[8])   // 家裡負擔%（null=未設/我全出）
     };
   }).filter(x => x.type).reverse();
+}
+
+/** 把前端傳來的 famPct 正規化成存進試算表的值（空字串=不適用） */
+function famPct_(t) {
+  return (t.famPct === '' || t.famPct == null) ? '' : Number(t.famPct);
 }
 
 /** 記帳頁用：某月的交易明細（最新在前） */
@@ -400,7 +408,7 @@ function updateRow(oldMonth, row, t) {
   const oldSh = ss.getSheetByName(oldMonth);
   if (!oldSh || row < 2 || row > oldSh.getLastRow()) throw new Error('找不到這筆紀錄');
 
-  const created = oldSh.getRange(row, TXN_HEADERS.length).getValue() || new Date();
+  const created = oldSh.getRange(row, CREATED_COL).getValue() || new Date();
   const dateObj = parseDate_(t.date);
   const newMonth = Utilities.formatDate(dateObj, TZ, 'yyyy-MM');
   const rowVals = [
@@ -411,7 +419,8 @@ function updateRow(oldMonth, row, t) {
     amt,
     t.category || (t.type === '轉帳' ? '轉帳' : ''),
     t.note || '',
-    created
+    created,
+    famPct_(t)
   ];
 
   if (newMonth === oldMonth) {

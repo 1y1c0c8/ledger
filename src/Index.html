@@ -61,6 +61,14 @@
       font-weight:600}
     .field select{direction:rtl}
 
+    /* 付款方（信用卡支出才出現） */
+    .paybtns{display:flex;gap:6px}
+    .paybtns button{border:1px solid var(--line);background:var(--card);color:var(--muted);
+      border-radius:999px;padding:5px 12px;font-size:13px;font-weight:700;
+      font-family:"Noto Sans TC";cursor:pointer}
+    .paybtns button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    input[type=range]{accent-color:var(--accent)}
+
     .save{position:fixed;left:0;right:0;bottom:0;z-index:30;
       padding:12px 16px max(14px,env(safe-area-inset-bottom));
       background:linear-gradient(transparent,var(--bg) 28%);max-width:560px;margin:0 auto}
@@ -178,6 +186,22 @@
           <label>項目類別</label>
           <select id="category"></select>
         </div>
+        <div class="field hide" id="fPay" style="flex-direction:column;align-items:stretch;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <label>付款方</label>
+            <div class="paybtns" id="payBtns">
+              <button type="button" data-fam="0" class="active" onclick="setPay(0)">我全出</button>
+              <button type="button" data-fam="100" onclick="setPay(100)">家裡全出</button>
+              <button type="button" data-fam="split" onclick="setPay('split')">拆帳</button>
+            </div>
+          </div>
+          <div class="hide" id="paySplit" style="display:flex;align-items:center;gap:10px">
+            <label style="white-space:nowrap">家裡負擔</label>
+            <input type="range" id="payPct" min="0" max="100" value="50" step="5"
+                   oninput="PAYFAM=+this.value;$('payPctOut').textContent=this.value+'%'" style="flex:1">
+            <span id="payPctOut" style="font-weight:700;min-width:42px;text-align:right">50%</span>
+          </div>
+        </div>
         <div class="field">
           <label>日期時間</label>
           <input type="datetime-local" id="date">
@@ -238,6 +262,12 @@
         <span style="font-weight:700">淨資產</span>
         <span class="v num" id="networth">0</span>
       </div>
+      <div class="card hide" id="cardSplitEntry" onclick="openCardSplit()"
+           style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer">
+        <div><div style="font-weight:600;font-size:15px">本月卡費分攤</div>
+          <div id="cardSplitSub" style="color:var(--muted);font-size:12px;margin-top:1px">我 $0 · 家 $0</div></div>
+        <span style="color:var(--muted)">›</span>
+      </div>
       <div class="sect-title">帳戶餘額</div>
       <div class="card" id="balanceList"><div class="empty">—</div></div>
     </section>
@@ -286,6 +316,22 @@
           <label>項目類別</label>
           <select id="eCategory"></select>
         </div>
+        <div class="field hide" id="eFPay" style="flex-direction:column;align-items:stretch;gap:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <label>付款方</label>
+            <div class="paybtns" id="ePayBtns">
+              <button type="button" data-fam="0" class="active" onclick="setEPay(0)">我全出</button>
+              <button type="button" data-fam="100" onclick="setEPay(100)">家裡全出</button>
+              <button type="button" data-fam="split" onclick="setEPay('split')">拆帳</button>
+            </div>
+          </div>
+          <div class="hide" id="ePaySplit" style="display:flex;align-items:center;gap:10px">
+            <label style="white-space:nowrap">家裡負擔</label>
+            <input type="range" id="ePayPct" min="0" max="100" value="50" step="5"
+                   oninput="EPAYFAM=+this.value;$('ePayPctOut').textContent=this.value+'%'" style="flex:1">
+            <span id="ePayPctOut" style="font-weight:700;min-width:42px;text-align:right">50%</span>
+          </div>
+        </div>
         <div class="field">
           <label>日期時間</label>
           <input type="datetime-local" id="eDate">
@@ -300,6 +346,27 @@
     </div>
   </div>
 
+  <!-- ===== 本月卡費分攤（浮層）===== -->
+  <div class="overlay" id="cardSplitSheet" onclick="if(event.target===this)closeSheets()">
+    <div class="sheet">
+      <div class="grip"></div>
+      <div class="sheet-title" id="cardSplitTitle">本月卡費分攤</div>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div style="flex:1;background:var(--accent-soft);border-radius:12px;padding:13px;text-align:center">
+          <div style="font-size:12px;color:var(--accent);font-weight:700">我要出</div>
+          <div class="num" style="font-size:24px;font-weight:800;color:var(--accent);margin-top:2px" id="csMine">$0</div>
+        </div>
+        <div style="flex:1;background:#f1efe8;border-radius:12px;padding:13px;text-align:center">
+          <div style="font-size:12px;color:var(--muted);font-weight:700">家裡出</div>
+          <div class="num" style="font-size:24px;font-weight:800;margin-top:2px" id="csFam">$0</div>
+        </div>
+      </div>
+      <div class="card" id="csList"></div>
+      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px">依每筆刷卡的付款方比例計算 · 不會自動扣款</div>
+      <button class="sheet-btn cancel" onclick="closeSheets()">關閉</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -308,6 +375,7 @@
     let ENTRYMONTH = null;                 // 記帳頁固定看當月
     let LASTENTRY = null, STAT = null, BAL = null, EDITING = null;
     let GRAN = 'month', STATKEY = null, PIEKIND = '支出', PIEACCT = '__all__';
+    let PAYFAM = 0, EPAYFAM = 0;            // 付款方：家裡負擔%（記帳表單 / 編輯視窗）
     const PAGE = 15;                       // 統計明細一次顯示筆數
     let statShown = PAGE;
     const ENTRY_RECENT = 8;                // 記帳頁「本月最近」顯示筆數
@@ -334,6 +402,8 @@
       STATKEY = cfg.currentMonth;        // 統計預設：本月
       $('date').value = nowLocalDT();
       setType('支出');
+      $('accountOut').onchange = updatePayVis;     // 出帳改成信用卡才顯示付款方
+      $('eAccountOut').onchange = updateEPayVis;
       buildPieAcct();
       $('pieAcct').onchange = ()=>{ PIEACCT = $('pieAcct').value; redrawPie(); };
       loadEntry();
@@ -366,8 +436,32 @@
         $('accountOut').innerHTML = opts(allReal);
         $('accountIn').innerHTML = opts(allReal);
       }
+      updatePayVis();
     }
     function show(id,on){$(id).classList.toggle('hide',!on);}
+
+    // ---- 付款方（信用卡支出才出現）----
+    function isLiability(name){ const a = CONFIG && CONFIG.accounts.find(x=>x.name===name); return !!a && a.type==='負債'; }
+    function updatePayVis(){ show('fPay', TYPE==='支出' && isLiability($('accountOut').value)); }
+    function setPay(v){
+      const split = v==='split';
+      show('paySplit', split);
+      document.querySelectorAll('#payBtns button').forEach(b=>b.classList.toggle('active', b.dataset.fam===String(v)));
+      PAYFAM = split ? (+$('payPct').value) : v;
+    }
+    function resetPay(){ $('payPct').value=50; $('payPctOut').textContent='50%'; setPay(0); }
+    function updateEPayVis(){ show('eFPay', $('eTypeSeg').dataset.type==='支出' && isLiability($('eAccountOut').value)); }
+    function setEPay(v){
+      const split = v==='split';
+      show('ePaySplit', split);
+      document.querySelectorAll('#ePayBtns button').forEach(b=>b.classList.toggle('active', b.dataset.fam===String(v)));
+      EPAYFAM = split ? (+$('ePayPct').value) : v;
+    }
+    function applyEPay(fp){
+      if(fp==null || fp===0) setEPay(0);
+      else if(fp===100) setEPay(100);
+      else { $('ePayPct').value=fp; $('ePayPctOut').textContent=fp+'%'; setEPay('split'); }
+    }
 
     function save(){
       const amt = parseFloat($('amount').value);
@@ -381,8 +475,9 @@
         accountIn:  (TYPE==='支出')?'':$('accountIn').value,
         category:   (TYPE==='轉帳')?'轉帳':$('category').value
       };
+      if(!$('fPay').classList.contains('hide')) t.famPct = PAYFAM;   // 只有刷卡支出才帶付款方
       google.script.run.withSuccessHandler(()=>{
-        $('amount').value=''; $('note').value=''; $('date').value=nowLocalDT();
+        $('amount').value=''; $('note').value=''; $('date').value=nowLocalDT(); resetPay();
         $('saveBtn').disabled=false; $('saveBtn').textContent='儲存';
         toast('已記錄 ✓'); reloadAll();
       }).withFailureHandler(e=>{
@@ -411,8 +506,43 @@
     }
     function renderEntryList(){
       const d = LASTENTRY, list = $('recentList');
-      if(!d || !d.txns.length){ list.innerHTML='<div class="empty">本月尚無紀錄</div>'; return; }
-      list.innerHTML = d.txns.slice(0, ENTRY_RECENT).map(rowHtml).join('');
+      list.innerHTML = (!d || !d.txns.length) ? '<div class="empty">本月尚無紀錄</div>'
+        : d.txns.slice(0, ENTRY_RECENT).map(rowHtml).join('');
+      renderCardSplitEntry();
+    }
+
+    // ---- 本月卡費分攤（信用卡支出依付款方拆「我/家」）----
+    function hasCards(){ return !!(CONFIG && CONFIG.accounts.some(a=>a.type==='負債')); }
+    function cardSplit(txns){
+      const cards = {}; (CONFIG?CONFIG.accounts:[]).forEach(a=>{ if(a.type==='負債') cards[a.name]=1; });
+      let mine=0, fam=0; const per={};
+      (txns||[]).forEach(t=>{
+        if(t.type!=='支出' || !cards[t.accountOut]) return;
+        const f=(t.famPct==null?0:t.famPct)/100, fa=t.amount*f, mi=t.amount-fa;
+        mine+=mi; fam+=fa;
+        per[t.accountOut] = per[t.accountOut] || {mine:0,fam:0};
+        per[t.accountOut].mine+=mi; per[t.accountOut].fam+=fa;
+      });
+      return { mine, fam, per };
+    }
+    function renderCardSplitEntry(){
+      const card = $('cardSplitEntry');
+      if(!hasCards()){ card.classList.add('hide'); return; }
+      const s = cardSplit(LASTENTRY && LASTENTRY.txns);
+      $('cardSplitSub').textContent = `我 ${fmt(s.mine)} · 家 ${fmt(s.fam)}`;
+      card.classList.remove('hide');
+    }
+    function openCardSplit(){
+      const s = cardSplit(LASTENTRY && LASTENTRY.txns);
+      $('cardSplitTitle').textContent = `本月卡費分攤 · ${ENTRYMONTH}`;
+      $('csMine').textContent = fmt(s.mine);
+      $('csFam').textContent = fmt(s.fam);
+      const names = Object.keys(s.per);
+      $('csList').innerHTML = names.length
+        ? names.map(n=>`<div class="row"><div class="mid"><div class="t1">${n}</div></div>
+            <div class="t2" style="color:var(--muted)">我 ${fmt(s.per[n].mine)} · 家 ${fmt(s.per[n].fam)}</div></div>`).join('')
+        : '<div class="empty">本月沒有刷卡紀錄</div>';
+      $('cardSplitSheet').classList.add('show');
     }
 
     // ---- 統計頁：日 / 月 / 年 ----
@@ -572,6 +702,7 @@
     function closeSheets(){
       $('actionSheet').classList.remove('show');
       $('editModal').classList.remove('show');
+      $('cardSplitSheet').classList.remove('show');
     }
 
     function doDelete(){
@@ -605,6 +736,7 @@
         $('eAccountOut').innerHTML = opts(allReal);
         $('eAccountIn').innerHTML = opts(allReal);
       }
+      updateEPayVis();
     }
 
     function openEdit(){
@@ -617,6 +749,7 @@
       if(t.type!=='收入') $('eAccountOut').value = t.accountOut;
       if(t.type!=='支出') $('eAccountIn').value  = t.accountIn;
       if(t.type!=='轉帳') $('eCategory').value   = t.category;
+      updateEPayVis(); applyEPay(t.famPct);
       $('editModal').classList.add('show');
     }
 
@@ -634,6 +767,7 @@
         accountIn:  (type==='支出')?'':$('eAccountIn').value,
         category:   (type==='轉帳')?'轉帳':$('eCategory').value
       };
+      if(!$('eFPay').classList.contains('hide')) payload.famPct = EPAYFAM;
       google.script.run.withSuccessHandler(()=>{
         $('eSaveBtn').disabled=false; $('eSaveBtn').textContent='更新';
         closeSheets(); toast('已更新 ✓'); reloadAll();
@@ -651,7 +785,7 @@
       $('tabStats').classList.toggle('active', v==='stats');
       $('tabAcct').classList.toggle('active', v==='acct');
       if(v==='stats' && !STAT) setGran('month');   // 首次進統計：建立選擇器並載入
-      if(v==='acct') loadBalances();               // 餘額會變，每次切入都刷新
+      if(v==='acct'){ loadBalances(); renderCardSplitEntry(); }   // 餘額會變，每次切入都刷新
     }
 
     function err(e){toast('發生錯誤：'+(e&&e.message?e.message:e));}
