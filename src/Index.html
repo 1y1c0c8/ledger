@@ -367,6 +367,36 @@
     </div>
   </div>
 
+  <!-- ===== 卡片帳單（浮層）===== -->
+  <div class="overlay" id="stmtSheet" onclick="if(event.target===this)closeSheets()">
+    <div class="sheet">
+      <div class="grip"></div>
+      <div class="sheet-title" id="stmtTitle">帳單</div>
+      <div style="display:flex;justify-content:center;align-items:center;gap:20px;margin-bottom:4px">
+        <button onclick="stmtNav(-1)" aria-label="上一期" style="border:0;background:transparent;font-size:22px;color:var(--accent);cursor:pointer">‹</button>
+        <span id="stmtRange" style="font-weight:700;font-family:Manrope">—</span>
+        <button onclick="stmtNav(1)" aria-label="下一期" style="border:0;background:transparent;font-size:22px;color:var(--accent);cursor:pointer">›</button>
+      </div>
+      <div class="sheet-sum" id="stmtMeta" style="padding-top:0"></div>
+      <div class="card" style="padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="t2" style="color:var(--muted)">結帳日</span>
+        <input id="stmtClose" type="number" inputmode="numeric" min="1" max="31" placeholder="—"
+               style="width:52px;border:1px solid var(--line);border-radius:8px;padding:5px;text-align:center;font-weight:700">
+        <span class="t2" style="color:var(--muted)">繳款日</span>
+        <input id="stmtDue" type="number" inputmode="numeric" min="1" max="31" placeholder="—"
+               style="width:52px;border:1px solid var(--line);border-radius:8px;padding:5px;text-align:center;font-weight:700">
+        <button class="more-btn" style="padding:6px 12px" onclick="saveCardDates()">儲存</button>
+      </div>
+      <div class="card" id="stmtList"></div>
+      <div style="display:flex;justify-content:space-between;margin:10px 4px 2px">
+        <span class="t2" style="color:var(--muted)">本期合計</span><span id="stmtTotal" class="num" style="font-weight:700">$0</span></div>
+      <div style="display:flex;justify-content:space-between;margin:0 4px 12px">
+        <span class="t2" style="color:var(--muted)">分攤</span><span id="stmtSplit" class="t2" style="color:var(--muted)">我 $0 · 家 $0</span></div>
+      <div id="stmtPayWrap"></div>
+      <button class="sheet-btn cancel" onclick="closeSheets()">關閉</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -376,6 +406,7 @@
     let LASTENTRY = null, STAT = null, BAL = null, EDITING = null;
     let GRAN = 'month', STATKEY = null, PIEKIND = '支出', PIEACCT = '__all__';
     let PAYFAM = 0, EPAYFAM = 0;            // 付款方：家裡負擔%（記帳表單 / 編輯視窗）
+    let STMTCARD = null, STMTYM = null, STMT = null;   // 卡片帳單頁狀態
     const PAGE = 15;                       // 統計明細一次顯示筆數
     let statShown = PAGE;
     const ENTRY_RECENT = 8;                // 記帳頁「本月最近」顯示筆數
@@ -545,6 +576,67 @@
       $('cardSplitSheet').classList.add('show');
     }
 
+    // ---- 卡片帳單頁（功能 2＋1）----
+    function payerLabel(fp){ return (fp==null||fp===0)?'我全出':(fp===100?'家全出':`拆${fp}%`); }
+    function setSelDefault(id, name){ const s=$(id); if(s && [].slice.call(s.options).some(o=>o.value===name)) s.value=name; }
+
+    function openStatement(card){ STMTCARD=card; STMTYM=null; loadStatement(card, null); }
+    function loadStatement(card, ym){
+      google.script.run.withSuccessHandler(st=>{ STMT=st; STMTYM=st.ym; renderStatement(st); $('stmtSheet').classList.add('show'); })
+        .withFailureHandler(err).getCardStatement(card, ym);
+    }
+    function stmtNav(d){
+      const [y,m]=STMTYM.split('-').map(Number); const dt=new Date(y, m-1+d, 1);
+      loadStatement(STMTCARD, `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`);
+    }
+    function renderStatement(st){
+      $('stmtTitle').textContent = st.card + ' 帳單';
+      $('stmtRange').textContent = st.closeDate ? `${st.start.slice(5)} – ${st.end.slice(5)}` : st.ym;
+      const status = !st.closeDate ? '尚未設定結帳日'
+        : st.paid ? '<span style="color:var(--income)">已繳 ✓</span>'
+        : st.isClosed ? '<span style="color:var(--expense)">待繳</span>' : '本期累計中';
+      $('stmtMeta').innerHTML = '<span class="t2" style="color:var(--muted)">'
+        + (st.closeDate ? `結帳 ${st.closeDate.slice(5)} · 繳款 ${st.dueDate?st.dueDate.slice(5):'—'} · ` : '')
+        + status + '</span>';
+      $('stmtClose').value = st.closeDay||''; $('stmtDue').value = st.dueDay||'';
+      $('stmtList').innerHTML = st.txns.length
+        ? st.txns.map(t=>`<div class="row"><div class="mid"><div class="t1">${t.category||'支出'}</div>
+            <div class="t2">${t.date.slice(5)} ${t.time} · ${payerLabel(t.famPct)}</div></div>
+            <div class="amt num neg">-${fmt(t.amount)}</div></div>`).join('')
+        : '<div class="empty">這期沒有刷卡</div>';
+      $('stmtTotal').textContent = fmt(st.total);
+      $('stmtSplit').textContent = `我 ${fmt(st.mine)} · 家 ${fmt(st.fam)}`;
+      renderPayArea(st);
+    }
+    function renderPayArea(st){
+      const w = $('stmtPayWrap');
+      if(!st.closeDate){ w.innerHTML=''; return; }
+      if(st.paid){ w.innerHTML='<div style="text-align:center;color:var(--income);font-weight:700;margin:6px 0 2px">已記錄繳款 ✓</div>'; return; }
+      if(!st.isClosed){ w.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;margin:6px 0 2px">本期尚未結帳，結帳後可記錄繳款</div>'; return; }
+      if(st.total<=0){ w.innerHTML=''; return; }
+      const assetOpts = opts(CONFIG.accounts.filter(a=>a.type==='資產'));
+      w.innerHTML = `<div class="card" style="padding:4px 14px;margin-bottom:8px">
+          <div class="field" style="border-top:0"><label>我的 ${fmt(st.mine)} 從</label><select id="payMine">${assetOpts}</select></div>
+          ${st.fam>0?`<div class="field"><label>家裡 ${fmt(st.fam)} 從</label><select id="payFam">${assetOpts}</select></div>`:''}
+        </div>
+        <button class="sheet-btn primary" onclick="doRecordPayment()">記錄繳款（共 ${fmt(st.total)}）</button>`;
+      setSelDefault('payMine','台新'); setSelDefault('payFam','郵局');
+    }
+    function saveCardDates(){
+      const close=+$('stmtClose').value||0, due=+$('stmtDue').value||0;
+      if(!close){ toast('請填結帳日'); return; }
+      google.script.run.withSuccessHandler(()=>{ toast('已儲存帳單日'); loadStatement(STMTCARD, STMTYM); reloadAll(); })
+        .withFailureHandler(err).setCardConfig(STMTCARD, close, due);
+    }
+    function doRecordPayment(){
+      const mineAcct = $('payMine')?$('payMine').value:'';
+      const famAcct = $('payFam')?$('payFam').value:'';
+      google.script.run.withSuccessHandler(r=>{
+        if(r && r.ok===false){ toast(r.msg||'無法繳款'); return; }
+        toast('已記錄繳款 ✓'); loadStatement(STMTCARD, STMTYM); reloadAll();
+      }).withFailureHandler(err).recordCardPayment(STMTCARD, STMTYM, mineAcct, famAcct);
+    }
+
     // ---- 統計頁：日 / 月 / 年 ----
     function setGran(g){
       GRAN = g; statShown = PAGE;
@@ -643,11 +735,19 @@
     function renderBalances(){
       const d = BAL;
       $('balanceList').innerHTML = d.balances.map(b=>{
-        const owed = b.type==='負債';
-        const shown = owed ? -b.balance : b.balance;   // 信用卡顯示「未繳」
+        if(b.type==='負債'){
+          const useCycle = b.currentDue!=null;                 // 有設結帳日→顯示本期未繳，否則累計未繳
+          const amt = useCycle ? b.currentDue : -b.balance;
+          const t2 = (useCycle?'本期未繳':'未繳')
+            + (b.closeDay? ` · ${b.closeDay}結帳·${b.dueDay||'?'}繳款` : ' · 點我設帳單日')
+            + (b.pending>0? ` · 上期待繳${fmt(b.pending)}` : '');
+          return `<div class="row tap" onclick="openStatement('${b.name}')"><div class="mid">
+              <div class="t1">${b.name}</div><div class="t2">${t2}</div></div>
+            <div class="amt num" style="color:${amt>0?'var(--expense)':'var(--ink)'}">${fmt(amt)}<span style="color:var(--muted);font-weight:400"> ›</span></div></div>`;
+        }
         return `<div class="row"><div class="mid">
-            <div class="t1">${b.name}</div><div class="t2">${b.group}${owed?' · 未繳':''}</div></div>
-          <div class="amt num" style="color:${owed&&shown>0?'var(--expense)':'var(--ink)'}">${fmt(shown)}</div></div>`;
+            <div class="t1">${b.name}</div><div class="t2">${b.group}</div></div>
+          <div class="amt num">${fmt(b.balance)}</div></div>`;
       }).join('') || '<div class="empty">—</div>';
       $('networth').textContent = fmt(d.networth);
     }
@@ -703,6 +803,7 @@
       $('actionSheet').classList.remove('show');
       $('editModal').classList.remove('show');
       $('cardSplitSheet').classList.remove('show');
+      $('stmtSheet').classList.remove('show');
     }
 
     function doDelete(){

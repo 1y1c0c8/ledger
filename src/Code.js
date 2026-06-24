@@ -379,12 +379,230 @@ function getBalances_() {
     .map(a => ({ name: a.name, group: a.group, type: a.type, balance: bal[a.name] }));
 }
 
-/** 帳戶頁用：各帳戶餘額＋淨資產（外部不計入） */
+/** 帳戶頁用：各帳戶餘額＋淨資產（外部不計入）；信用卡再附上帳單週期資訊 */
 function getBalances() {
   const list = getBalances_();
   let networth = 0;
   list.forEach(b => networth += b.balance);
+  const cfgMap = getCardConfig();
+  list.forEach(b => {
+    if (b.type !== '負債') return;
+    const c = cfgMap[b.name] || {};
+    b.closeDay = c.close || 0;
+    b.dueDay = c.due || 0;
+    if (c.close) {
+      const cur = cardCurrentDue_(b.name, c.close);
+      b.currentDue = cur ? cur.due : 0;          // 本期(未結帳)累積刷卡額
+      b.pending = cardPendingClosed_(b.name, c.close);  // 上一期(已結帳未繳)金額，0=無
+    } else {
+      b.currentDue = null;                       // 沒設結帳日 → 前端退回顯示累計未繳
+      b.pending = 0;
+    }
+  });
   return { balances: list, networth: networth };
+}
+
+/* ===== 信用卡帳單週期 ===== */
+
+const PAY_TAG = '繳款·';   // 繳款轉帳的 note 前綴，後接該期結帳日(yyyy-MM-dd)，用來判定「已繳」
+
+function clampDay_(year, monthIdx, day) {
+  const lastDay = new Date(year, monthIdx + 1, 0).getDate();
+  return Math.min(day, lastDay);
+}
+
+/** 列出 startStr..endStr(yyyy-MM-dd) 涵蓋的月份分頁名(yyyy-MM) */
+function monthsBetween_(startStr, endStr) {
+  let [y, m] = startStr.slice(0, 7).split('-').map(Number);
+  const [ey, em] = endStr.slice(0, 7).split('-').map(Number);
+  const out = [];
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(y + '-' + String(m).padStart(2, '0'));
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+
+/** 在 (year,monthIdx) 月以 closeDay 結帳的帳單週期 [start,end]（含端點）＋結帳日 */
+function cycleByCloseMonth_(closeDay, year, monthIdx) {
+  const endD = new Date(year, monthIdx, clampDay_(year, monthIdx, closeDay), 12, 0, 0);
+  const ps = new Date(year, monthIdx - 1, clampDay_(year, monthIdx - 1, closeDay), 12, 0, 0);
+  ps.setDate(ps.getDate() + 1);   // 上一期結帳日的隔天
+  const f = x => Utilities.formatDate(x, TZ, 'yyyy-MM-dd');
+  return { start: f(ps), end: f(endD), closeDate: f(endD) };
+}
+
+/** 以 ref 為準，目前「未結帳(open)」週期是哪個結帳月 {year, monthIdx} */
+function openCloseMonth_(closeDay, ref) {
+  const y = ref.getFullYear(), m = ref.getMonth(), d = ref.getDate();
+  if (d <= clampDay_(y, m, closeDay)) return { year: y, monthIdx: m };
+  const nx = new Date(y, m + 1, 1);
+  return { year: nx.getFullYear(), monthIdx: nx.getMonth() };
+}
+
+/** 某期(結帳日 closeDate)的繳款日：dueDay 大於結帳日的「日」→同月，否則→下個月 */
+function dueDateFor_(closeDate, dueDay) {
+  const [y, m, d] = closeDate.split('-').map(Number);
+  let yy = y, mm = m - 1;
+  if (dueDay <= d) { const nx = new Date(yy, mm + 1, 1); yy = nx.getFullYear(); mm = nx.getMonth(); }
+  return Utilities.formatDate(new Date(yy, mm, clampDay_(yy, mm, dueDay), 12, 0, 0), TZ, 'yyyy-MM-dd');
+}
+
+/** 該期(closeDate)是否已記錄繳款：找「轉入該卡且 note 帶 繳款·closeDate」的轉帳（找結帳月起算 3 個月內） */
+function isCyclePaid_(card, closeDate) {
+  if (!closeDate) return false;
+  const tag = PAY_TAG + closeDate;
+  const [y, m] = closeDate.split('-').map(Number);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  for (let k = 0; k <= 2; k++) {
+    const dt = new Date(y, (m - 1) + k, 1);
+    const sh = ss.getSheetByName(Utilities.formatDate(dt, TZ, 'yyyy-MM'));
+    if (!sh) continue;
+    const hit = readTxns_(sh).some(t => t.type === '轉帳' && t.accountIn === card && String(t.note || '').indexOf(tag) >= 0);
+    if (hit) return true;
+  }
+  return false;
+}
+
+/** 某卡某週期內的刷卡總額 */
+function sumCardCharges_(card, start, end) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sum = 0;
+  monthsBetween_(start, end).forEach(mn => {
+    const sh = ss.getSheetByName(mn); if (!sh) return;
+    readTxns_(sh).forEach(t => {
+      if (t.type === '支出' && t.accountOut === card && t.date >= start && t.date <= end) sum += t.amount;
+    });
+  });
+  return sum;
+}
+
+/** 本期(未結帳)累積刷卡額 */
+function cardCurrentDue_(card, closeDay) {
+  const oc = openCloseMonth_(closeDay, new Date());
+  const cyc = cycleByCloseMonth_(closeDay, oc.year, oc.monthIdx);
+  return { due: sumCardCharges_(card, cyc.start, cyc.end), closeDate: cyc.closeDate };
+}
+
+/** 上一期(已結帳)若未繳，回傳金額；已繳或無則 0 */
+function cardPendingClosed_(card, closeDay) {
+  const oc = openCloseMonth_(closeDay, new Date());
+  const d = new Date(oc.year, oc.monthIdx - 1, 1);    // open 月的前一個月＝最近結帳的那期
+  const cyc = cycleByCloseMonth_(closeDay, d.getFullYear(), d.getMonth());
+  if (isCyclePaid_(card, cyc.closeDate)) return 0;
+  return sumCardCharges_(card, cyc.start, cyc.end);
+}
+
+/** 讀「信用卡帳單設定」：{卡名: {close, due}}（放在設定分頁 I~K 欄，避開帳戶/類別的讀取範圍） */
+function getCardConfig() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cfg = ss.getSheetByName(CFG_SHEET);
+  if (!cfg) return {};
+  ensureCardSection_(cfg);
+  const n = Math.max(cfg.getLastRow() - 5, 1);
+  const rows = cfg.getRange(6, 9, n, 3).getValues();   // I,J,K = 卡名,結帳日,繳款日
+  const map = {};
+  rows.forEach(r => {
+    if (r[0] === '') return;
+    map[String(r[0]).trim()] = { close: Number(r[1]) || 0, due: Number(r[2]) || 0 };
+  });
+  return map;
+}
+
+/** 確保設定分頁有「信用卡帳單」區塊(I4 起)；首次呼叫會建好標題並把目前的負債卡各放一列（日先空白） */
+function ensureCardSection_(cfg) {
+  if (cfg.getRange('I4').getValue()) return;
+  cfg.getRange('I4').setValue('信用卡帳單').setFontWeight('bold').setFontColor(COLORS.sectionText).setFontSize(12);
+  cfg.getRange(5, 9, 1, 3).setValues([['卡名', '結帳日', '繳款日']])
+     .setBackground(COLORS.section).setFontWeight('bold').setFontColor(COLORS.sectionText);
+  const cards = getBalances_().filter(a => a.type === '負債').map(a => [a.name, '', '']);
+  if (cards.length) cfg.getRange(6, 9, cards.length, 3).setValues(cards);
+  cfg.setColumnWidth(8, 28);
+  cfg.setColumnWidth(9, 120); cfg.setColumnWidth(10, 70); cfg.setColumnWidth(11, 70);
+  cfg.getRange(4, 9, cards.length + 2, 3).setFontFamily('Noto Sans TC');
+}
+
+/** 前端設定某卡的結帳日/繳款日（沒有該列就新增一列） */
+function setCardConfig(card, close, due) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cfg = ss.getSheetByName(CFG_SHEET);
+  ensureCardSection_(cfg);
+  const n = Math.max(cfg.getLastRow() - 5, 1);
+  const names = cfg.getRange(6, 9, n, 1).getValues();
+  let rowIdx = -1, lastFilled = 5;
+  for (let i = 0; i < names.length; i++) {
+    if (names[i][0] !== '') lastFilled = 6 + i;
+    if (String(names[i][0]).trim() === card) { rowIdx = 6 + i; break; }
+  }
+  if (rowIdx === -1) { rowIdx = lastFilled + 1; cfg.getRange(rowIdx, 9).setValue(card); }
+  cfg.getRange(rowIdx, 10).setValue(close ? Number(close) : '');
+  cfg.getRange(rowIdx, 11).setValue(due ? Number(due) : '');
+  return { ok: true };
+}
+
+/** 卡片帳單頁：某卡、某結帳月(ym='yyyy-MM'，省略=目前未結帳期) 的帳單 */
+function getCardStatement(card, ym) {
+  const conf = getCardConfig()[card] || { close: 0, due: 0 };
+  const closeDay = conf.close, dueDay = conf.due;
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+
+  let year, monthIdx;
+  if (ym) { const p = ym.split('-'); year = +p[0]; monthIdx = +p[1] - 1; }
+  else if (closeDay) { const oc = openCloseMonth_(closeDay, new Date()); year = oc.year; monthIdx = oc.monthIdx; }
+  else { const n = new Date(); year = n.getFullYear(); monthIdx = n.getMonth(); }
+
+  let cyc;
+  if (closeDay) cyc = cycleByCloseMonth_(closeDay, year, monthIdx);
+  else cyc = {
+    start: Utilities.formatDate(new Date(year, monthIdx, 1, 12, 0, 0), TZ, 'yyyy-MM-dd'),
+    end: Utilities.formatDate(new Date(year, monthIdx + 1, 0, 12, 0, 0), TZ, 'yyyy-MM-dd'),
+    closeDate: ''
+  };
+  const dueDate = (closeDay && dueDay) ? dueDateFor_(cyc.closeDate, dueDay) : '';
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let txns = [], total = 0, mine = 0, fam = 0;
+  monthsBetween_(cyc.start, cyc.end).forEach(mn => {
+    const sh = ss.getSheetByName(mn); if (!sh) return;
+    readTxns_(sh).forEach(t => {
+      if (t.date < cyc.start || t.date > cyc.end) return;
+      if (t.type === '支出' && t.accountOut === card) {
+        txns.push(t);
+        const f = (t.famPct == null ? 0 : t.famPct) / 100;
+        total += t.amount; fam += t.amount * f; mine += t.amount * (1 - f);
+      }
+    });
+  });
+  txns.sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
+
+  return {
+    card: card, closeDay: closeDay, dueDay: dueDay,
+    closeDate: cyc.closeDate, dueDate: dueDate, start: cyc.start, end: cyc.end,
+    ym: year + '-' + String(monthIdx + 1).padStart(2, '0'),
+    txns: txns, total: total, mine: mine, fam: fam,
+    paid: closeDay ? isCyclePaid_(card, cyc.closeDate) : false,
+    isClosed: !!(cyc.closeDate && cyc.closeDate < today)
+  };
+}
+
+/** 記錄繳款：依該期付款方拆「我/家」各產生一筆轉帳(來源帳戶→卡)，note 標記該期以利判定已繳 */
+function recordCardPayment(card, ym, mineAcct, famAcct) {
+  const st = getCardStatement(card, ym);
+  if (!st.closeDate) return { ok: false, msg: '請先設定結帳日' };
+  if (st.paid) return { ok: false, msg: '這期已記錄過繳款' };
+  if (st.total <= 0) return { ok: false, msg: '這期沒有可繳金額' };
+
+  const note = PAY_TAG + st.closeDate;
+  const payDate = st.dueDate || st.closeDate;
+  const mineAmt = Math.round(st.mine);
+  const famAmt = Math.round(st.total) - mineAmt;
+  if (mineAmt > 0 && mineAcct) {
+    addTransaction({ type: '轉帳', amount: mineAmt, date: payDate, accountOut: mineAcct, accountIn: card, category: '轉帳', note: note });
+  }
+  if (famAmt > 0 && famAcct) {
+    addTransaction({ type: '轉帳', amount: famAmt, date: payDate, accountOut: famAcct, accountIn: card, category: '轉帳', note: note });
+  }
+  return { ok: true };
 }
 
 /** 刪除某月某一列（前端清單的操作選單用） */
