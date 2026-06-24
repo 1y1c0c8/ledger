@@ -392,11 +392,14 @@ function getBalances() {
     b.dueDay = c.due || 0;
     if (c.close) {
       const cur = cardCurrentDue_(b.name, c.close);
-      b.currentDue = cur ? cur.due : 0;          // 本期(未結帳)累積刷卡額
-      b.pending = cardPendingClosed_(b.name, c.close);  // 上一期(已結帳未繳)金額，0=無
+      b.currentDue = cur.due;                     // 本期(未結帳)累積刷卡額
+      b.nextClose = cur.closeDate;                // 本期預計結帳日
+      const pend = cardPendingClosed_(b.name, c.close, c.due);
+      b.pending = pend.amount;                    // 上一期(已結帳未繳)金額，0=無
+      b.pendingDue = pend.dueDate;                // 上一期繳款日
     } else {
-      b.currentDue = null;                       // 沒設結帳日 → 前端退回顯示累計未繳
-      b.pending = 0;
+      b.currentDue = null;                        // 沒設結帳日 → 前端退回顯示累計未繳
+      b.pending = 0; b.nextClose = ''; b.pendingDue = '';
     }
   });
   return { balances: list, networth: networth };
@@ -448,11 +451,12 @@ function dueDateFor_(closeDate, dueDay) {
   return Utilities.formatDate(new Date(yy, mm, clampDay_(yy, mm, dueDay), 12, 0, 0), TZ, 'yyyy-MM-dd');
 }
 
-/** 該期(closeDate)是否已記錄繳款：找「轉入該卡且 note 帶 繳款·closeDate」的轉帳（找結帳月起算 3 個月內） */
-function isCyclePaid_(card, closeDate) {
-  if (!closeDate) return false;
-  const tag = PAY_TAG + closeDate;
-  const [y, m] = closeDate.split('-').map(Number);
+/** 該期(以結帳月 ym='yyyy-MM' 識別)是否已記錄繳款：找「轉入該卡且 note 帶 繳款·ym」的轉帳。
+ *  用「月份」而非確切日期，這樣結帳日在 23/24 間微調也不會弄亂已繳判定。 */
+function isCyclePaid_(card, ym) {
+  if (!ym) return false;
+  const tag = PAY_TAG + ym;
+  const [y, m] = ym.split('-').map(Number);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   for (let k = 0; k <= 2; k++) {
     const dt = new Date(y, (m - 1) + k, 1);
@@ -484,13 +488,17 @@ function cardCurrentDue_(card, closeDay) {
   return { due: sumCardCharges_(card, cyc.start, cyc.end), closeDate: cyc.closeDate };
 }
 
-/** 上一期(已結帳)若未繳，回傳金額；已繳或無則 0 */
-function cardPendingClosed_(card, closeDay) {
+/** 上一期(已結帳)若未繳，回傳 {amount, dueDate}；已繳或無則 amount 0 */
+function cardPendingClosed_(card, closeDay, dueDay) {
   const oc = openCloseMonth_(closeDay, new Date());
   const d = new Date(oc.year, oc.monthIdx - 1, 1);    // open 月的前一個月＝最近結帳的那期
   const cyc = cycleByCloseMonth_(closeDay, d.getFullYear(), d.getMonth());
-  if (isCyclePaid_(card, cyc.closeDate)) return 0;
-  return sumCardCharges_(card, cyc.start, cyc.end);
+  const ym = cyc.closeDate.slice(0, 7);
+  if (isCyclePaid_(card, ym)) return { amount: 0, dueDate: '' };
+  return {
+    amount: sumCardCharges_(card, cyc.start, cyc.end),
+    dueDate: dueDay ? dueDateFor_(cyc.closeDate, dueDay) : ''
+  };
 }
 
 /** 讀「信用卡帳單設定」：{卡名: {close, due}}（放在設定分頁 I~K 欄，避開帳戶/類別的讀取範圍） */
@@ -574,13 +582,14 @@ function getCardStatement(card, ym) {
     });
   });
   txns.sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
+  const ymOut = year + '-' + String(monthIdx + 1).padStart(2, '0');
 
   return {
     card: card, closeDay: closeDay, dueDay: dueDay,
     closeDate: cyc.closeDate, dueDate: dueDate, start: cyc.start, end: cyc.end,
-    ym: year + '-' + String(monthIdx + 1).padStart(2, '0'),
+    ym: ymOut,
     txns: txns, total: total, mine: mine, fam: fam,
-    paid: closeDay ? isCyclePaid_(card, cyc.closeDate) : false,
+    paid: closeDay ? isCyclePaid_(card, ymOut) : false,
     isClosed: !!(cyc.closeDate && cyc.closeDate < today)
   };
 }
@@ -592,7 +601,7 @@ function recordCardPayment(card, ym, mineAcct, famAcct) {
   if (st.paid) return { ok: false, msg: '這期已記錄過繳款' };
   if (st.total <= 0) return { ok: false, msg: '這期沒有可繳金額' };
 
-  const note = PAY_TAG + st.closeDate;
+  const note = PAY_TAG + st.ym;            // 用結帳月標記，日期微調不影響已繳判定
   const payDate = st.dueDate || st.closeDate;
   const mineAmt = Math.round(st.mine);
   const famAmt = Math.round(st.total) - mineAmt;

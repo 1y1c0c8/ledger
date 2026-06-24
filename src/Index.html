@@ -258,6 +258,7 @@
 
     <!-- ===== 帳戶 ===== -->
     <section id="viewAcct" class="hide">
+      <div class="card hide" id="cardReminder" style="margin-bottom:8px;padding:10px 16px"></div>
       <div class="card networth">
         <span style="font-weight:700">淨資產</span>
         <span class="v num" id="networth">0</span>
@@ -739,8 +740,7 @@
           const useCycle = b.currentDue!=null;                 // 有設結帳日→顯示本期未繳，否則累計未繳
           const amt = useCycle ? b.currentDue : -b.balance;
           const t2 = (useCycle?'本期未繳':'未繳')
-            + (b.closeDay? ` · ${b.closeDay}結帳·${b.dueDay||'?'}繳款` : ' · 點我設帳單日')
-            + (b.pending>0? ` · 上期待繳${fmt(b.pending)}` : '');
+            + (b.closeDay? ` · ${b.closeDay}結帳·${b.dueDay||'?'}繳款` : ' · 點我設帳單日');
           return `<div class="row tap" onclick="openStatement('${b.name}')"><div class="mid">
               <div class="t1">${b.name}</div><div class="t2">${t2}</div></div>
             <div class="amt num" style="color:${amt>0?'var(--expense)':'var(--ink)'}">${fmt(amt)}<span style="color:var(--muted);font-weight:400"> ›</span></div></div>`;
@@ -750,6 +750,43 @@
           <div class="amt num">${fmt(b.balance)}</div></div>`;
       }).join('') || '<div class="empty">—</div>';
       $('networth').textContent = fmt(d.networth);
+      renderReminder();
+    }
+
+    // 帳戶 tab 提醒：上期待繳(含繳款日/剩幾天)＋ 即將結帳(提示核對金額/調整結帳日)
+    function daysUntil(dateStr){
+      if(!dateStr) return null;
+      const [y,m,d]=dateStr.split('-').map(Number);
+      const due=new Date(y,m-1,d); due.setHours(0,0,0,0);
+      const now=new Date(); now.setHours(0,0,0,0);
+      return Math.round((due-now)/86400000);
+    }
+    function renderReminder(){
+      const box=$('cardReminder');
+      if(!BAL){ box.classList.add('hide'); return; }
+      const lines=[];
+      BAL.balances.forEach(b=>{
+        if(b.type!=='負債' || !b.closeDay) return;
+        if(b.pending>0){
+          const dd=daysUntil(b.pendingDue);
+          const tag = dd==null?'' : (dd<0?`逾期 ${-dd} 天`:(dd===0?'今天到期':`剩 ${dd} 天`));
+          const when = b.pendingDue?`${b.pendingDue.slice(5)} 前`:'';
+          const col = (dd!=null&&dd<=3)?'var(--expense)':'var(--ink)';
+          lines.push(`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)">
+            <span><b style="color:var(--expense)">待繳</b> ${b.name} ${fmt(b.pending)}</span>
+            <span style="color:${col};font-weight:700;white-space:nowrap">${when} ${tag}</span></div>`);
+        } else {
+          const dc=daysUntil(b.nextClose);
+          if(dc!=null && dc>=0 && dc<=3){
+            lines.push(`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line)">
+              <span>${b.name} 約 ${b.nextClose.slice(5)} 結帳</span>
+              <span style="color:var(--muted);white-space:nowrap">剩 ${dc} 天 · 核對金額</span></div>`);
+          }
+        }
+      });
+      if(!lines.length){ box.classList.add('hide'); return; }
+      box.innerHTML = '<div style="font-weight:700;font-size:13px;color:var(--muted)">提醒</div>'+lines.join('');
+      box.classList.remove('hide');
     }
 
     // 任一筆變動（新增/編輯/刪除）後，刷新已載入過的各頁
