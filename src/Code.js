@@ -595,16 +595,18 @@ function getCardStatement(card, ym) {
 }
 
 /** 記錄繳款：依該期付款方拆「我/家」各產生一筆轉帳(來源帳戶→卡)，note 標記該期以利判定已繳 */
-function recordCardPayment(card, ym, mineAcct, famAcct) {
+function recordCardPayment(card, ym, mineAcct, famAcct, mineAmtIn, famAmtIn) {
   const st = getCardStatement(card, ym);
   if (!st.closeDate) return { ok: false, msg: '請先設定結帳日' };
   if (st.paid) return { ok: false, msg: '這期已記錄過繳款' };
-  if (st.total <= 0) return { ok: false, msg: '這期沒有可繳金額' };
 
   const note = PAY_TAG + st.ym;            // 用結帳月標記，日期微調不影響已繳判定
   const payDate = st.dueDate || st.closeDate;
-  const mineAmt = Math.round(st.mine);
-  const famAmt = Math.round(st.total) - mineAmt;
+  // 金額以前端填的「銀行帳單實際金額」為準（沒填才用 App 估算）；
+  // 與已記錄刷卡的差額會自然留在卡片累計餘額、滾到下一期，不必追入帳日。
+  const mineAmt = (mineAmtIn === '' || mineAmtIn == null) ? Math.round(st.mine) : Math.round(Number(mineAmtIn));
+  const famAmt = (famAmtIn === '' || famAmtIn == null) ? (Math.round(st.total) - Math.round(st.mine)) : Math.round(Number(famAmtIn));
+  if (mineAmt <= 0 && famAmt <= 0) return { ok: false, msg: '金額需大於 0' };
   if (mineAmt > 0 && mineAcct) {
     addTransaction({ type: '轉帳', amount: mineAmt, date: payDate, accountOut: mineAcct, accountIn: card, category: '轉帳', note: note });
   }

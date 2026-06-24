@@ -614,13 +614,18 @@
       if(!st.closeDate){ w.innerHTML=''; return; }
       if(st.paid){ w.innerHTML='<div style="text-align:center;color:var(--income);font-weight:700;margin:6px 0 2px">已記錄繳款 ✓</div>'; return; }
       if(!st.isClosed){ w.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;margin:6px 0 2px">本期尚未結帳，結帳後可記錄繳款</div>'; return; }
-      if(st.total<=0){ w.innerHTML=''; return; }
       const assetOpts = opts(CONFIG.accounts.filter(a=>a.type==='資產'));
-      w.innerHTML = `<div class="card" style="padding:4px 14px;margin-bottom:8px">
-          <div class="field" style="border-top:0"><label>我的 ${fmt(st.mine)} 從</label><select id="payMine">${assetOpts}</select></div>
-          ${st.fam>0?`<div class="field"><label>家裡 ${fmt(st.fam)} 從</label><select id="payFam">${assetOpts}</select></div>`:''}
+      const amtStyle = 'width:90px;text-align:right;border:1px solid var(--line);border-radius:8px;padding:6px;font-weight:700;font-family:Manrope';
+      w.innerHTML = `<div class="card" style="padding:4px 14px;margin-bottom:6px">
+          <div class="field" style="border-top:0;justify-content:flex-start;gap:8px"><label>我的</label>
+            <input id="payMineAmt" type="number" inputmode="numeric" value="${Math.round(st.mine)}" style="${amtStyle}">
+            <span class="t2" style="color:var(--muted)">從</span><select id="payMine" style="flex:1">${assetOpts}</select></div>
+          <div class="field" style="justify-content:flex-start;gap:8px"><label>家裡</label>
+            <input id="payFamAmt" type="number" inputmode="numeric" value="${Math.round(st.fam)}" style="${amtStyle}">
+            <span class="t2" style="color:var(--muted)">從</span><select id="payFam" style="flex:1">${assetOpts}</select></div>
         </div>
-        <button class="sheet-btn primary" onclick="doRecordPayment()">記錄繳款（共 ${fmt(st.total)}）</button>`;
+        <div class="t2" style="color:var(--muted);margin:0 2px 8px">金額預設為 App 估算，可改成銀行帳單實際金額；差額會留在卡片餘額、自動滾到下一期。</div>
+        <button class="sheet-btn primary" onclick="doRecordPayment()">記錄繳款</button>`;
       setSelDefault('payMine','台新'); setSelDefault('payFam','郵局');
     }
     function saveCardDates(){
@@ -632,10 +637,12 @@
     function doRecordPayment(){
       const mineAcct = $('payMine')?$('payMine').value:'';
       const famAcct = $('payFam')?$('payFam').value:'';
+      const mineAmt = $('payMineAmt')?$('payMineAmt').value:'';
+      const famAmt = $('payFamAmt')?$('payFamAmt').value:'';
       google.script.run.withSuccessHandler(r=>{
         if(r && r.ok===false){ toast(r.msg||'無法繳款'); return; }
         toast('已記錄繳款 ✓'); loadStatement(STMTCARD, STMTYM); reloadAll();
-      }).withFailureHandler(err).recordCardPayment(STMTCARD, STMTYM, mineAcct, famAcct);
+      }).withFailureHandler(err).recordCardPayment(STMTCARD, STMTYM, mineAcct, famAcct, mineAmt, famAmt);
     }
 
     // ---- 統計頁：日 / 月 / 年 ----
@@ -739,7 +746,7 @@
         if(b.type==='負債'){
           const useCycle = b.currentDue!=null;                 // 有設結帳日→顯示本期未繳，否則累計未繳
           const amt = useCycle ? b.currentDue : -b.balance;
-          const t2 = (useCycle?'本期未繳':'未繳')
+          const t2 = (useCycle?'本期已刷':'未繳')
             + (b.closeDay? ` · ${b.closeDay}結帳·${b.dueDay||'?'}繳款` : ' · 點我設帳單日');
           return `<div class="row tap" onclick="openStatement('${b.name}')"><div class="mid">
               <div class="t1">${b.name}</div><div class="t2">${t2}</div></div>
