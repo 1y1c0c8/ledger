@@ -15,7 +15,8 @@
   - `getBalances()`：各帳戶餘額＋淨資產（帳戶頁用）；底層仍是 `getBalances_()`。信用卡額外附 `closeDay/dueDay/currentDue(本期未繳)/pending(上期已結帳未繳)`。
   - `updateRow(oldMonth, row, t)`：編輯已存紀錄；沿用原「建立時間」；**若日期被改到別的月份會自動把該筆搬到正確月份分頁**。
   - `readTxns_(sh)`：讀單張月份分頁的交易（getMonthData/getStats 共用）；每筆帶 `sheet` 欄，讓前端能用 `sheet`+`row` 定位編輯/刪除（年/週檢視會跨多張分頁）。
-  - **信用卡帳單週期**：`getCardConfig()`/`setCardConfig(card,close,due)` 讀寫每張卡的結帳日/繳款日（存在設定分頁 I~K 欄，見資料模型）；`getCardStatement(card, ym)` 回傳某結帳月的帳單（依**真實結帳日→結帳日**週期：明細、合計、我/家分攤、繳款日、`paid`/`isClosed`）；`recordCardPayment(card, ym, mineAcct, famAcct)` 依付款方把該期拆成「我」「家」各一筆轉帳(來源→卡)，note 標 `繳款·<結帳日>` 供 `isCyclePaid_` 判定已繳。週期計算：`cycleByCloseMonth_`/`openCloseMonth_`/`dueDateFor_`/`cardCurrentDue_`/`cardPendingClosed_`。
+  - **信用卡帳單週期**：`getCardConfig()`/`setCardConfig(card,close,due)` 讀寫每張卡的結帳日/繳款日（存在設定分頁 I~K 欄，見資料模型）；`getCardStatement(card, ym)` 回傳某結帳月的帳單（依**真實結帳日→結帳日**週期：明細、合計、我/家分攤、繳款日、`paid`/`isClosed`）；`recordCardPayment(card, ym, mineAcct, famAcct, mineAmtIn, famAmtIn)` 依付款方把該期拆成「我」「家」各一筆轉帳(來源→卡)，**金額以前端填的「銀行帳單實際金額」為準**(沒填才用估算)，note 標 `繳款·<結帳月>`(用月份，日期微調不影響) 供 `isCyclePaid_` 判定已繳。週期計算：`cycleByCloseMonth_`/`openCloseMonth_`/`dueDateFor_`/`cardCurrentDue_`/`cardPendingClosed_`。
+  - **重要觀念**：App 用「消費日」歸期，銀行用「入帳日」，兩者必有落差，所以 App 的每期金額是**估算**（帳戶卡片顯示「本期已刷」）。真相來源是銀行帳單：繳款時填銀行實際金額即可，**與已記刷卡的差額會自然留在卡片累計餘額、滾到下一期**，不需追入帳日。淨資產靠「累計餘額＋每期照實繳」維持正確。
 - `src/Index.html` — 前端 UI（HtmlService）。三個分頁：
   - **記帳**：交易表單 ＋「本月最近」短清單（點一筆 → 操作選單可編輯/刪除）。
   - **統計**：`日/週/月/年` ＋ 指定日期/週(選週內一天)/月份/年份 → 收入/支出/結餘、分布圓餅（支出/收入切換、可再依帳戶篩選）、該期間明細（可編輯/刪除）。
