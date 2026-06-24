@@ -8,17 +8,18 @@
 
 ## 檔案
 - `src/Code.js` — Apps Script 後端：`setup()`、`getConfig()`、`addTransaction()`、`getMonthData()`、
-  `getStats()`、`getBalances()`、`deleteRow()`、`updateRow()`，以及試算表自動排版（`styleConfigSheet_` / `styleMonthSheet_`）。
+  `getStats()`、`getBalances()`、`deleteRow()`、`updateRow()`、`getCardConfig()`、`setCardConfig()`、`getCardStatement()`、`recordCardPayment()`，以及試算表自動排版（`styleConfigSheet_` / `styleMonthSheet_`）。
   - `getMonthData(month)`：某月交易明細（記帳頁「本月最近」用）。
   - `getStats(gran, key)`：依 `day`/`week`/`month`/`year` 聚合收入、支出、結餘與該期間明細（統計頁用），回傳 `label`（週會給「起訖日」字串）。分布圓餅改由前端從 `txns` 即時算（可依 支出/收入 × 帳戶 篩選），後端不再回傳 pie。
   - `weekRange_(dateStr)`：以**週一為一週開始**；給週內任一天，回傳該週起訖日與涵蓋的月份分頁（跨月的週會涵蓋兩張）。
-  - `getBalances()`：各帳戶餘額＋淨資產（帳戶頁用）；底層仍是 `getBalances_()`。
+  - `getBalances()`：各帳戶餘額＋淨資產（帳戶頁用）；底層仍是 `getBalances_()`。信用卡額外附 `closeDay/dueDay/currentDue(本期未繳)/pending(上期已結帳未繳)`。
   - `updateRow(oldMonth, row, t)`：編輯已存紀錄；沿用原「建立時間」；**若日期被改到別的月份會自動把該筆搬到正確月份分頁**。
   - `readTxns_(sh)`：讀單張月份分頁的交易（getMonthData/getStats 共用）；每筆帶 `sheet` 欄，讓前端能用 `sheet`+`row` 定位編輯/刪除（年/週檢視會跨多張分頁）。
+  - **信用卡帳單週期**：`getCardConfig()`/`setCardConfig(card,close,due)` 讀寫每張卡的結帳日/繳款日（存在設定分頁 I~K 欄，見資料模型）；`getCardStatement(card, ym)` 回傳某結帳月的帳單（依**真實結帳日→結帳日**週期：明細、合計、我/家分攤、繳款日、`paid`/`isClosed`）；`recordCardPayment(card, ym, mineAcct, famAcct)` 依付款方把該期拆成「我」「家」各一筆轉帳(來源→卡)，note 標 `繳款·<結帳日>` 供 `isCyclePaid_` 判定已繳。週期計算：`cycleByCloseMonth_`/`openCloseMonth_`/`dueDateFor_`/`cardCurrentDue_`/`cardPendingClosed_`。
 - `src/Index.html` — 前端 UI（HtmlService）。三個分頁：
   - **記帳**：交易表單 ＋「本月最近」短清單（點一筆 → 操作選單可編輯/刪除）。
   - **統計**：`日/週/月/年` ＋ 指定日期/週(選週內一天)/月份/年份 → 收入/支出/結餘、分布圓餅（支出/收入切換、可再依帳戶篩選）、該期間明細（可編輯/刪除）。
-  - **帳戶**：淨資產 ＋ 各帳戶餘額（跨月累計）。
+  - **帳戶**：淨資產 ＋ 各帳戶餘額（跨月累計）。信用卡顯示**本期未繳**（有設結帳日才算；否則退回累計未繳）＋結帳/繳款日＋上期待繳提醒；**點卡片 → 卡片帳單浮層**（切換帳單週期、明細、我/家分攤、設定結帳/繳款日、`記錄繳款`）。另有「本月卡費分攤」浮層（依付款方拆我/家）。
   前端用 `google.script.run` 呼叫後端；已移除頂部月份下拉，期間選擇只在統計頁。
 - `src/appsscript.json` — Apps Script 設定檔，非必要勿動（`doGet()` 已加 `setXFrameOptionsMode(ALLOWALL)` 讓 App 可被啟動頁 iframe 嵌入）。
 - `docs/` — GitHub Pages 啟動頁（**可選**；只有把 App 設成「任何人可用」時才用得上）：
@@ -32,15 +33,17 @@
 - `assets/` 圖示原始檔；`README.md` 安裝/更新說明；`update.sh` 朋友的一鍵更新（`git pull && clasp push && clasp deploy`，自動抓自己的部署 ID）。
 
 ## 資料模型
-每筆交易欄位：日期時間、類型(收入/支出/轉帳)、出帳帳戶、入帳帳戶、金額、類別、備註、建立時間。
+每筆交易欄位：日期時間、類型(收入/支出/轉帳)、出帳帳戶、入帳帳戶、金額、類別、備註、建立時間、家裡負擔%。
 - 收入：入帳帳戶＝資產帳戶；出帳留空。
 - 支出：出帳帳戶＝資產或信用卡；入帳留空。
 - 轉帳：出帳 → 入帳。
 - **日期時間**(A欄)：記錄到「分」(前端 `datetime-local`，預設帶當下時刻)，用來分析消費習慣；月份分頁仍依此欄的 `yyyy-MM` 歸屬。改版前的舊資料無時間，顯示為中午 12:00。`parseDate_` 同時吃純日期與含時間字串。
 - **建立時間**(H欄)：系統記錄當下的時間戳，編輯時不會變動，與「日期時間」分開。
+- **家裡負擔%**(I欄)：付款方，只對「刷卡支出」有意義（0=我全出、100=家裡全出、其它=拆帳的家裡比例）；空白=不適用/我全出。後端用 `CREATED_COL=8` 固定抓建立時間（加欄後不可用 `TXN_HEADERS.length`）。
 
 帳戶與類別都定義在試算表「設定」分頁（帳戶在 A 欄起、類別在 F 欄起，**資料皆從第 6 列開始**）。
 帳戶類型欄：`資產` / `負債`(信用卡) / `外部`。
+**信用卡帳單設定**放在「設定」分頁的 **I~K 欄**（卡名/結帳日/繳款日），刻意避開 getConfig 讀取的 A~D、F~G 範圍；首次呼叫 `getCardConfig` 會由 `ensureCardSection_` 自動建好標題與各負債卡列（日先空白），也可在 App 卡片帳單頁內設定。
 
 ## 改程式時必須遵守的規則
 - **信用卡走「帳戶版」**：刷卡＝支出且出帳帳戶＝該卡（卡餘額為負＝未繳）；繳費＝轉帳（銀行→卡）；
