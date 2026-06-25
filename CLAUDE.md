@@ -15,7 +15,8 @@
   - `getBalances()`：各帳戶餘額＋淨資產（帳戶頁用）；底層仍是 `getBalances_()`。信用卡額外附 `closeDay/dueDay/currentDue(本期未繳)/pending(上期已結帳未繳)`。
   - `updateRow(oldMonth, row, t)`：編輯已存紀錄；沿用原「建立時間」；**若日期被改到別的月份會自動把該筆搬到正確月份分頁**。
   - `readTxns_(sh)`：讀單張月份分頁的交易（getMonthData/getStats 共用）；每筆帶 `sheet` 欄，讓前端能用 `sheet`+`row` 定位編輯/刪除（年/週檢視會跨多張分頁）。
-  - **信用卡帳單週期**：`getCardConfig()`/`setCardConfig(card,close,due)` 讀寫每張卡的結帳日/繳款日（存在設定分頁 I~K 欄，見資料模型）；`getCardStatement(card, ym)` 回傳某結帳月的帳單（依**真實結帳日→結帳日**週期：明細、合計、我/家分攤、繳款日、`paid`/`isClosed`）；`recordCardPayment(card, ym, mineAcct, famAcct, mineAmtIn, famAmtIn)` 依付款方把該期拆成「我」「家」各一筆轉帳(來源→卡)，**金額以前端填的「銀行帳單實際金額」為準**(沒填才用估算)，note 標 `繳款·<結帳月>`(用月份，日期微調不影響) 供 `isCyclePaid_` 判定已繳。週期計算：`cycleByCloseMonth_`/`openCloseMonth_`/`dueDateFor_`/`cardCurrentDue_`/`cardPendingClosed_`。
+  - **信用卡帳單週期**：`getCardConfig()`/`setCardConfig(card,close,due)` 讀寫每張卡的結帳日/繳款日（存在設定分頁 I~K 欄，見資料模型）；`getCardStatement(card, ym)` 回傳某結帳月的帳單（依**真實結帳日→結帳日**週期：明細、合計、我/家分攤、繳款日、`paid`/`isClosed`）；`recordCardPayment(card, ym, mineAcct, famAcct, mineAmtIn, famAmtIn)` 依付款方把該期拆成「我」「家」各一筆轉帳(來源→卡)，**金額以前端填的「銀行帳單實際金額」為準**(沒填才用估算)，note 標 `繳款·<結帳月>`(用月份，日期微調不影響) 供 `isCyclePaid_` 判定已繳。`reverseCardPayment(card, ym)` 撤銷某期繳款(刪掉該期繳款轉帳、還原帳戶)；`setChargeBill(sheet, row, billYm)` 設某筆刷卡的「帳單月(J欄)」做延期。週期計算：`cycleByCloseMonth_`/`openCloseMonth_`/`dueDateFor_`/`naturalCloseMonth_`/`addMonths_`/`cardCycleData_`(考慮延期、回傳 checked/deferred)/`cardCurrentDue_`/`cardPendingClosed_`。
+  - **延期(帳單頁勾選)**：每筆刷卡有「有效結帳月」＝`帳單月`(J欄)覆蓋值，沒有就用消費日的自然結帳月(`naturalCloseMonth_`)。帳單頁取消勾選某筆＝把它的帳單月設成下一結帳月(延到下一期)；勾選＝設回本期。合計/分攤/本期已刷只算「計入本期」的。
   - **重要觀念**：App 用「消費日」歸期，銀行用「入帳日」，兩者必有落差，所以 App 的每期金額是**估算**（帳戶卡片顯示「本期已刷」）。真相來源是銀行帳單：繳款時填銀行實際金額即可，**與已記刷卡的差額會自然留在卡片累計餘額、滾到下一期**，不需追入帳日。淨資產靠「累計餘額＋每期照實繳」維持正確。
 - `src/Index.html` — 前端 UI（HtmlService）。三個分頁：
   - **記帳**：交易表單 ＋「本月最近」短清單（點一筆 → 操作選單可編輯/刪除）。
@@ -40,7 +41,8 @@
 - 轉帳：出帳 → 入帳。
 - **日期時間**(A欄)：記錄到「分」(前端 `datetime-local`，預設帶當下時刻)，用來分析消費習慣；月份分頁仍依此欄的 `yyyy-MM` 歸屬。改版前的舊資料無時間，顯示為中午 12:00。`parseDate_` 同時吃純日期與含時間字串。
 - **建立時間**(H欄)：系統記錄當下的時間戳，編輯時不會變動，與「日期時間」分開。
-- **家裡負擔%**(I欄)：付款方，只對「刷卡支出」有意義（0=我全出、100=家裡全出、其它=拆帳的家裡比例）；空白=不適用/我全出。後端用 `CREATED_COL=8` 固定抓建立時間（加欄後不可用 `TXN_HEADERS.length`）。
+- **家裡負擔%**(I欄)：付款方，只對「刷卡支出」有意義（0=我全出、100=家裡全出、其它=拆帳的家裡比例）；空白=不適用/我全出。
+- **帳單月**(J欄)：信用卡延期標記，`yyyy-MM`=把這筆延到該結帳月、空白=照消費日歸期。後端用 `CREATED_COL=8`、`BILL_COL=10` 固定抓欄位（加欄後不可用 `TXN_HEADERS.length`）。
 
 帳戶與類別都定義在試算表「設定」分頁（帳戶在 A 欄起、類別在 F 欄起，**資料皆從第 6 列開始**）。
 帳戶類型欄：`資產` / `負債`(信用卡) / `外部`。
