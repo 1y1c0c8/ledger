@@ -616,6 +616,29 @@ function recordCardPayment(card, ym, mineAcct, famAcct, mineAmtIn, famAmtIn) {
   return { ok: true };
 }
 
+/** 撤銷某期繳款：刪掉該期繳款產生的轉帳(轉入該卡、note 帶 繳款·ym)，帳戶金額即回到繳費前 */
+function reverseCardPayment(card, ym) {
+  if (!ym) return { ok: false, msg: '缺少期別' };
+  const tag = PAY_TAG + ym;
+  const [y, m] = ym.split('-').map(Number);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let removed = 0;
+  for (let k = 0; k <= 2; k++) {
+    const dt = new Date(y, (m - 1) + k, 1);
+    const sh = ss.getSheetByName(Utilities.formatDate(dt, TZ, 'yyyy-MM'));
+    if (!sh) continue;
+    const last = sh.getLastRow();
+    if (last < 2) continue;
+    const vals = sh.getRange(2, 1, last - 1, TXN_HEADERS.length).getValues();
+    const rows = [];
+    vals.forEach((r, i) => {
+      if (r[1] === '轉帳' && r[3] === card && String(r[6] || '').indexOf(tag) >= 0) rows.push(i + 2);
+    });
+    rows.sort((a, b) => b - a).forEach(rw => { sh.deleteRow(rw); removed++; });   // 由下往上刪，避免列號位移
+  }
+  return { ok: removed > 0, removed: removed, msg: removed ? '' : '找不到這期的繳款紀錄' };
+}
+
 /** 刪除某月某一列（前端清單的操作選單用） */
 function deleteRow(month, row) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();

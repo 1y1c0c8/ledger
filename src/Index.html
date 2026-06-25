@@ -612,7 +612,11 @@
     function renderPayArea(st){
       const w = $('stmtPayWrap');
       if(!st.closeDate){ w.innerHTML=''; return; }
-      if(st.paid){ w.innerHTML='<div style="text-align:center;color:var(--income);font-weight:700;margin:6px 0 2px">已記錄繳款 ✓</div>'; return; }
+      if(st.paid){
+        w.innerHTML = '<div style="text-align:center;color:var(--income);font-weight:700;margin:6px 0 8px">已記錄繳款 ✓</div>'
+          + '<button class="sheet-btn del" onclick="undoPayment()">撤銷這期繳款</button>';
+        return;
+      }
       if(!st.isClosed){ w.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;margin:6px 0 2px">本期尚未結帳，結帳後可記錄繳款</div>'; return; }
       const assetOpts = opts(CONFIG.accounts.filter(a=>a.type==='資產'));
       const amtStyle = 'width:90px;text-align:right;border:1px solid var(--line);border-radius:8px;padding:6px;font-weight:700;font-family:Manrope';
@@ -643,6 +647,13 @@
         if(r && r.ok===false){ toast(r.msg||'無法繳款'); return; }
         toast('已記錄繳款 ✓'); loadStatement(STMTCARD, STMTYM); reloadAll();
       }).withFailureHandler(err).recordCardPayment(STMTCARD, STMTYM, mineAcct, famAcct, mineAmt, famAmt);
+    }
+    function undoPayment(){
+      if(!confirm('撤銷這期的繳款紀錄？會刪掉繳款產生的轉帳、把帳戶金額還原到繳費前。')) return;
+      google.script.run.withSuccessHandler(r=>{
+        if(r && r.ok===false){ toast(r.msg||'找不到繳款紀錄'); return; }
+        toast('已撤銷繳款'); loadStatement(STMTCARD, STMTYM); reloadAll();
+      }).withFailureHandler(err).reverseCardPayment(STMTCARD, STMTYM);
     }
 
     // ---- 統計頁：日 / 月 / 年 ----
