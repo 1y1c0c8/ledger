@@ -590,6 +590,12 @@
       const [y,m]=STMTYM.split('-').map(Number); const dt=new Date(y, m-1+d, 1);
       loadStatement(STMTCARD, `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`);
     }
+    function nextYm(ym){ const [y,m]=ym.split('-').map(Number); const d=new Date(y,m,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+    function toggleCharge(sheet,row,checked){
+      const target = checked ? STMT.ym : nextYm(STMT.ym);   // 勾＝本期；不勾＝延到下一期
+      google.script.run.withSuccessHandler(()=>{ loadStatement(STMTCARD, STMTYM); reloadAll(); })
+        .withFailureHandler(err).setChargeBill(sheet, row, target);
+    }
     function renderStatement(st){
       $('stmtTitle').textContent = st.card + ' 帳單';
       $('stmtRange').textContent = st.closeDate ? `${st.start.slice(5)} – ${st.end.slice(5)}` : st.ym;
@@ -600,10 +606,18 @@
         + (st.closeDate ? `結帳 ${st.closeDate.slice(5)} · 繳款 ${st.dueDate?st.dueDate.slice(5):'—'} · ` : '')
         + status + '</span>';
       $('stmtClose').value = st.closeDay||''; $('stmtDue').value = st.dueDay||'';
+      const hint = (st.closeDate && st.txns.length)
+        ? '<div class="t2" style="color:var(--muted);padding:8px 12px 2px">勾選＝計入本期；取消勾選＝延到下一期帳單</div>' : '';
       $('stmtList').innerHTML = st.txns.length
-        ? st.txns.map(t=>`<div class="row"><div class="mid"><div class="t1">${t.category||'支出'}</div>
-            <div class="t2">${t.date.slice(5)} ${t.time} · ${payerLabel(t.famPct)}</div></div>
-            <div class="amt num neg">-${fmt(t.amount)}</div></div>`).join('')
+        ? hint + st.txns.map(t=>{
+            const cb = st.closeDate
+              ? `<input type="checkbox" ${t.inThisCycle?'checked':''} onchange="toggleCharge('${t.sheet}',${t.row},this.checked)" style="width:18px;height:18px;accent-color:var(--accent);flex:none">`
+              : '';
+            const dim = t.inThisCycle?'':'opacity:.45';
+            return `<div class="row">${cb}<div class="mid"><div class="t1" style="${dim}">${t.category||'支出'}</div>
+              <div class="t2" style="${dim}">${t.date.slice(5)} ${t.time} · ${payerLabel(t.famPct)}${t.inThisCycle?'':' · 已延到下一期'}</div></div>
+              <div class="amt num neg" style="${dim}">-${fmt(t.amount)}</div></div>`;
+          }).join('')
         : '<div class="empty">這期沒有刷卡</div>';
       $('stmtTotal').textContent = fmt(st.total);
       $('stmtSplit').textContent = `我 ${fmt(st.mine)} · 家 ${fmt(st.fam)}`;
