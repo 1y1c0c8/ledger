@@ -263,12 +263,6 @@
         <span style="font-weight:700">淨資產</span>
         <span class="v num" id="networth">0</span>
       </div>
-      <div class="card hide" id="cardSplitEntry" onclick="openCardSplit()"
-           style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;cursor:pointer">
-        <div><div style="font-weight:600;font-size:15px">本月卡費分攤</div>
-          <div id="cardSplitSub" style="color:var(--muted);font-size:12px;margin-top:1px">我 $0 · 家 $0</div></div>
-        <span style="color:var(--muted)">›</span>
-      </div>
       <div class="sect-title">帳戶餘額</div>
       <div class="card" id="balanceList"><div class="empty">—</div></div>
     </section>
@@ -344,27 +338,6 @@
       </div>
       <button class="sheet-btn primary" id="eSaveBtn" onclick="saveEdit()">更新</button>
       <button class="sheet-btn cancel" onclick="closeSheets()">取消</button>
-    </div>
-  </div>
-
-  <!-- ===== 本月卡費分攤（浮層）===== -->
-  <div class="overlay" id="cardSplitSheet" onclick="if(event.target===this)closeSheets()">
-    <div class="sheet">
-      <div class="grip"></div>
-      <div class="sheet-title" id="cardSplitTitle">本月卡費分攤</div>
-      <div style="display:flex;gap:10px;margin-bottom:12px">
-        <div style="flex:1;background:var(--accent-soft);border-radius:12px;padding:13px;text-align:center">
-          <div style="font-size:12px;color:var(--accent);font-weight:700">我要出</div>
-          <div class="num" style="font-size:24px;font-weight:800;color:var(--accent);margin-top:2px" id="csMine">$0</div>
-        </div>
-        <div style="flex:1;background:#f1efe8;border-radius:12px;padding:13px;text-align:center">
-          <div style="font-size:12px;color:var(--muted);font-weight:700">家裡出</div>
-          <div class="num" style="font-size:24px;font-weight:800;margin-top:2px" id="csFam">$0</div>
-        </div>
-      </div>
-      <div class="card" id="csList"></div>
-      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px">依每筆刷卡的付款方比例計算 · 不會自動扣款</div>
-      <button class="sheet-btn cancel" onclick="closeSheets()">關閉</button>
     </div>
   </div>
 
@@ -540,41 +513,6 @@
       const d = LASTENTRY, list = $('recentList');
       list.innerHTML = (!d || !d.txns.length) ? '<div class="empty">本月尚無紀錄</div>'
         : d.txns.slice(0, ENTRY_RECENT).map(rowHtml).join('');
-      renderCardSplitEntry();
-    }
-
-    // ---- 本月卡費分攤（信用卡支出依付款方拆「我/家」）----
-    function hasCards(){ return !!(CONFIG && CONFIG.accounts.some(a=>a.type==='負債')); }
-    function cardSplit(txns){
-      const cards = {}; (CONFIG?CONFIG.accounts:[]).forEach(a=>{ if(a.type==='負債') cards[a.name]=1; });
-      let mine=0, fam=0; const per={};
-      (txns||[]).forEach(t=>{
-        if(t.type!=='支出' || !cards[t.accountOut]) return;
-        const f=(t.famPct==null?0:t.famPct)/100, fa=t.amount*f, mi=t.amount-fa;
-        mine+=mi; fam+=fa;
-        per[t.accountOut] = per[t.accountOut] || {mine:0,fam:0};
-        per[t.accountOut].mine+=mi; per[t.accountOut].fam+=fa;
-      });
-      return { mine, fam, per };
-    }
-    function renderCardSplitEntry(){
-      const card = $('cardSplitEntry');
-      if(!hasCards()){ card.classList.add('hide'); return; }
-      const s = cardSplit(LASTENTRY && LASTENTRY.txns);
-      $('cardSplitSub').textContent = `我 ${fmt(s.mine)} · 家 ${fmt(s.fam)}`;
-      card.classList.remove('hide');
-    }
-    function openCardSplit(){
-      const s = cardSplit(LASTENTRY && LASTENTRY.txns);
-      $('cardSplitTitle').textContent = `本月卡費分攤 · ${ENTRYMONTH}`;
-      $('csMine').textContent = fmt(s.mine);
-      $('csFam').textContent = fmt(s.fam);
-      const names = Object.keys(s.per);
-      $('csList').innerHTML = names.length
-        ? names.map(n=>`<div class="row"><div class="mid"><div class="t1">${n}</div></div>
-            <div class="t2" style="color:var(--muted)">我 ${fmt(s.per[n].mine)} · 家 ${fmt(s.per[n].fam)}</div></div>`).join('')
-        : '<div class="empty">本月沒有刷卡紀錄</div>';
-      $('cardSplitSheet').classList.add('show');
     }
 
     // ---- 卡片帳單頁（功能 2＋1）----
@@ -871,7 +809,6 @@
     function closeSheets(){
       $('actionSheet').classList.remove('show');
       $('editModal').classList.remove('show');
-      $('cardSplitSheet').classList.remove('show');
       $('stmtSheet').classList.remove('show');
     }
 
@@ -955,7 +892,7 @@
       $('tabStats').classList.toggle('active', v==='stats');
       $('tabAcct').classList.toggle('active', v==='acct');
       if(v==='stats' && !STAT) setGran('month');   // 首次進統計：建立選擇器並載入
-      if(v==='acct'){ loadBalances(); renderCardSplitEntry(); }   // 餘額會變，每次切入都刷新
+      if(v==='acct') loadBalances();               // 餘額會變，每次切入都刷新
     }
 
     function err(e){toast('發生錯誤：'+(e&&e.message?e.message:e));}
