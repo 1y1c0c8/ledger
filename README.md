@@ -21,7 +21,7 @@ update.sh  一鍵更新腳本
 ## A. 第一次安裝（每個人各做一次）
 
 1. **裝工具**：`npm i -g @google/clasp`，然後 `clasp login`（登入你自己的 Google 帳號）。
-2. **建立你自己的後台**：在 Apps Script 新建一個專案（或用 `clasp create --type standalone`），
+2. **建立你自己的後台**：在 Apps Script 新建一個專案（或用 `clasp create --type sheets`），
    複製 `.clasp.json.example` 成 `.clasp.json`，把裡面的 `scriptId` 換成你自己的（`rootDir` 維持 `src`）。
 3. **推程式並初始化**：`clasp push` →在 Apps Script 編輯器手動執行一次 `setup()`
    （會建立「設定」分頁與當月分頁；帳戶/類別直接在「設定」分頁增修）。
