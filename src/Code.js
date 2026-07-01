@@ -184,6 +184,7 @@ function styleMonthSheet_(sh) {
   sh.getRange('A2:A').setNumberFormat('yyyy-mm-dd hh:mm');
   sh.getRange('E2:E').setNumberFormat('$#,##0').setHorizontalAlignment('right');
   sh.getRange('H2:H').setNumberFormat('yyyy-mm-dd hh:mm').setFontColor(COLORS.muted);
+  sh.getRange('J2:J').setNumberFormat('@');   // 帳單月存純文字（避免 'yyyy-MM' 被當日期）
   sh.getRange('B2:B').setHorizontalAlignment('center');
 
   // 斑馬紋（不蓋到表頭）
@@ -273,7 +274,7 @@ function readTxns_(sh) {
       category: r[5],
       note: r[6],
       famPct: (r[8] === '' || r[8] == null) ? null : Number(r[8]),  // 家裡負擔%（null=未設/我全出）
-      bill: (r[9] === '' || r[9] == null) ? '' : String(r[9]).trim() // 帳單月覆蓋（延期；''=照消費日）
+      bill: billStr_(r[9])   // 帳單月覆蓋（延期；''=照消費日；容錯：試算表可能把 'yyyy-MM' 存成日期）
     };
   }).filter(x => x.type).reverse();
 }
@@ -281,6 +282,13 @@ function readTxns_(sh) {
 /** 把前端傳來的 famPct 正規化成存進試算表的值（空字串=不適用） */
 function famPct_(t) {
   return (t.famPct === '' || t.famPct == null) ? '' : Number(t.famPct);
+}
+
+/** 把「帳單月」欄的值正規化成 'yyyy-MM'（試算表可能把字串存成日期，這裡容錯還原） */
+function billStr_(v) {
+  if (v === '' || v == null) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, TZ, 'yyyy-MM');
+  return String(v).trim();
 }
 
 /** 記帳頁用：某月的交易明細（最新在前） */
@@ -622,7 +630,9 @@ function setChargeBill(sheet, row, billYm) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(sheet);
   if (!sh || row < 2 || row > sh.getLastRow()) return { ok: false };
-  sh.getRange(row, BILL_COL).setValue(billYm || '');
+  const cell = sh.getRange(row, BILL_COL);
+  cell.setNumberFormat('@');          // 純文字，避免 '2026-07' 被試算表當成日期
+  cell.setValue(billYm || '');
   return { ok: true };
 }
 
@@ -693,7 +703,7 @@ function updateRow(oldMonth, row, t) {
   if (!oldSh || row < 2 || row > oldSh.getLastRow()) throw new Error('找不到這筆紀錄');
 
   const created = oldSh.getRange(row, CREATED_COL).getValue() || new Date();
-  const billYm = oldSh.getRange(row, BILL_COL).getValue() || '';   // 保留延期標記
+  const billYm = billStr_(oldSh.getRange(row, BILL_COL).getValue());   // 保留延期標記（容錯還原成 yyyy-MM）
   const dateObj = parseDate_(t.date);
   const newMonth = Utilities.formatDate(dateObj, TZ, 'yyyy-MM');
   const rowVals = [
