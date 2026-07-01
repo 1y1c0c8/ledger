@@ -58,7 +58,7 @@ const DEFAULT_CATEGORIES = [
 /** 部署成網頁 App 後的進入點 */
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('記帳')
+    .setTitle('💰記帳')
     .addMetaTag('viewport',
       'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)   // 允許被 GitHub Pages 啟動頁的 iframe 嵌入（自訂主畫面圖示用）
