@@ -227,8 +227,11 @@
         </div>
         <div style="padding:6px 16px 2px;font-size:12px;color:var(--muted)">分給別人（選對象＋填金額）</div>
         <div id="splitParts"></div>
-        <div style="padding:8px 16px;display:flex;justify-content:space-between;align-items:center">
-          <span class="pill" onclick="addPartRow()">＋ 加一人</span>
+        <div style="padding:8px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span style="display:flex;gap:8px">
+            <span class="pill" onclick="addPartRow()">＋ 加一人</span>
+            <span class="pill" onclick="newParty()">＋ 新對象</span>
+          </span>
           <span id="splitLeft" style="font-weight:700;font-size:13px">未分配 0</span>
         </div>
       </div>
@@ -545,7 +548,7 @@
     }
     function partOpts(){ return (CONFIG.parties||[]).map(p=>`<option value="${p}">${p}</option>`).join(''); }
     function addPartRow(){
-      if(!(CONFIG.parties||[]).length){ toast('先到「設定」分頁的分帳對象加人名'); return; }
+      if(!(CONFIG.parties||[]).length){ newParty(); return; }   // 還沒有人 → 直接開新增
       const div=document.createElement('div');
       div.className='field'; div.style.cssText='justify-content:flex-start;gap:8px';
       div.innerHTML=`<select class="ppart" style="flex:1">${partOpts()}</select>
@@ -553,6 +556,26 @@
                style="width:96px;text-align:right;border:1px solid var(--line);border-radius:8px;padding:6px;font-weight:600">
         <span onclick="this.closest('.field').remove();updateSplitLeft()" style="color:var(--muted);cursor:pointer;font-size:18px">✕</span>`;
       $('splitParts').appendChild(div);
+    }
+    function refreshPartySelects(){
+      document.querySelectorAll('#splitParts .ppart').forEach(sel=>{
+        const v=sel.value; sel.innerHTML=partOpts();
+        if([].slice.call(sel.options).some(o=>o.value===v)) sel.value=v;
+      });
+    }
+    function newParty(){
+      const name=(prompt('新增分帳對象（名字）')||'').trim();
+      if(!name) return;
+      google.script.run.withSuccessHandler(r=>{
+        if(r && r.ok===false){ toast(r.msg||'失敗'); return; }
+        CONFIG.parties = r.parties || CONFIG.parties;
+        if(!$('splitParts').children.length) addPartRow();   // 此時已有人，不會再彈新增
+        refreshPartySelects();
+        const sels=document.querySelectorAll('#splitParts .ppart');
+        if(sels.length) sels[sels.length-1].value=name;      // 最後一列選到剛加的人
+        updateSplitLeft();
+        toast(r.dup?'已有這個對象':'已新增對象');
+      }).withFailureHandler(err).addParty(name);
     }
     function updateSplitLeft(){
       const total=parseFloat($('amount').value)||0, mine=parseFloat($('myShare').value)||0;

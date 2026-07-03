@@ -506,6 +506,23 @@ function settleParty(party, account, amount) {
   return { ok: true };
 }
 
+/** App 內新增分帳對象：寫進設定分頁 M 欄；回傳更新後的名單 */
+function addParty(name) {
+  name = String(name || '').trim();
+  if (!name) return { ok: false, msg: '請輸入名字' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cfg = ss.getSheetByName(CFG_SHEET);
+  ensurePartySection_(cfg);
+  const readList = () => cfg.getRange(6, 13, Math.max(cfg.getLastRow() - 5, 1), 1)
+    .getValues().map(r => String(r[0]).trim());
+  const col = readList();
+  if (col.indexOf(name) >= 0) return { ok: true, dup: true, parties: col.filter(x => x !== '') };
+  let rowIdx = 6;
+  for (let i = 0; i < col.length; i++) if (col[i] !== '') rowIdx = 7 + i;   // 接在最後一個名字後面
+  cfg.getRange(rowIdx, 13).setValue(name);
+  return { ok: true, parties: readList().filter(x => x !== '') };
+}
+
 /* ===== 信用卡帳單週期 ===== */
 
 const PAY_TAG = '繳款·';   // 繳款轉帳的 note 前綴，後接該期結帳日(yyyy-MM-dd)，用來判定「已繳」
