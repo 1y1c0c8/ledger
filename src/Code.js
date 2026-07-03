@@ -6,9 +6,11 @@
 
 const TZ = 'Asia/Taipei';
 const CFG_SHEET = '設定';
-const TXN_HEADERS = ['日期', '類型', '出帳帳戶', '入帳帳戶', '金額', '類別', '備註', '建立時間', '家裡負擔%', '帳單月'];
+const TXN_HEADERS = ['日期', '類型', '出帳帳戶', '入帳帳戶', '金額', '類別', '備註', '建立時間', '家裡負擔%', '帳單月', '對象'];
 const CREATED_COL = 8;   // 「建立時間」固定在第 8 欄（不可用 TXN_HEADERS.length，加欄後會跑掉）
 const BILL_COL = 10;     // 「帳單月」固定在第 10 欄（延期標記：'yyyy-MM'=延到該結帳月；空=照消費日）
+const PARTY_COL = 11;    // 「對象」固定在第 11 欄（分帳/代墊的對象人名）
+const SPLIT_ACCT = '代墊款';   // 代墊往來用的資產帳戶（別人先欠你的錢；算進淨資產）
 
 const COLORS = {
   header:'#0f766e', headerText:'#ffffff', section:'#e3efed', sectionText:'#0b5c55',
@@ -177,7 +179,7 @@ function styleMonthSheet_(sh) {
   sh.setFrozenColumns(1);
 
   // 欄寬
-  const W = [130, 64, 110, 110, 100, 90, 220, 140, 80, 80];
+  const W = [130, 64, 110, 110, 100, 90, 220, 140, 80, 80, 90];
   W.forEach((w, i) => sh.setColumnWidth(i + 1, w));
 
   // 格式
@@ -188,7 +190,7 @@ function styleMonthSheet_(sh) {
   sh.getRange('B2:B').setHorizontalAlignment('center');
 
   // 斑馬紋（不蓋到表頭）
-  sh.getRange('A2:J2000').applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+  sh.getRange('A2:K2000').applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
 
   // 用顏色標示交易類型
   const rule = (t, bg, fg) => SpreadsheetApp.newConditionalFormatRule()
@@ -200,7 +202,7 @@ function styleMonthSheet_(sh) {
     rule('轉帳', COLORS.transferBg, COLORS.transferFg)
   ]);
 
-  sh.getRange('A1:J2000').setFontFamily('Noto Sans TC');
+  sh.getRange('A1:K2000').setFontFamily('Noto Sans TC');
 }
 
 /** 給前端：帳戶、類別、可用月份 */
@@ -208,6 +210,8 @@ function getConfig() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let cfg = ss.getSheetByName(CFG_SHEET);
   if (!cfg) { setup(); cfg = ss.getSheetByName(CFG_SHEET); }
+  ensureSplitAccount_(cfg);   // 確保有「代墊款」資產帳戶
+  ensurePartySection_(cfg);   // 確保設定分頁有「分帳對象」名單欄(M)
   const n = Math.max(cfg.getLastRow() - 5, 1);
 
   const accounts = cfg.getRange(6, 1, n, 4).getValues()
@@ -218,13 +222,16 @@ function getConfig() {
     .filter(r => r[0] !== '')
     .map(r => ({ name: String(r[0]).trim(), kind: String(r[1]).trim() }));
 
+  const parties = cfg.getRange(6, 13, n, 1).getValues()   // M 欄＝分帳對象
+    .map(r => String(r[0]).trim()).filter(x => x !== '');
+
   const monthRe = /^\d{4}-\d{2}$/;
   let months = ss.getSheets().map(s => s.getName()).filter(nm => monthRe.test(nm));
   const cur = currentMonth_();
   if (months.indexOf(cur) === -1) months.push(cur);
   months.sort().reverse();
 
-  return { accounts, categories, months, currentMonth: cur };
+  return { accounts, categories, parties, splitAcct: SPLIT_ACCT, months, currentMonth: cur };
 }
 
 /** 新增一筆交易 */
@@ -249,7 +256,8 @@ function addTransaction(t) {
     t.note || '',
     new Date(),
     famPct_(t),              // 家裡負擔%（只對刷卡支出有意義，其餘留空）
-    ''                       // 帳單月（延期標記；新增時空白＝照消費日歸期）
+    '',                      // 帳單月（延期標記；新增時空白＝照消費日歸期）
+    t.party || ''            // 對象（分帳/代墊的人名）
   ]);
   return { ok: true, month: month };
 }
@@ -274,7 +282,8 @@ function readTxns_(sh) {
       category: r[5],
       note: r[6],
       famPct: (r[8] === '' || r[8] == null) ? null : Number(r[8]),  // 家裡負擔%（null=未設/我全出）
-      bill: billStr_(r[9])   // 帳單月覆蓋（延期；''=照消費日；容錯：試算表可能把 'yyyy-MM' 存成日期）
+      bill: billStr_(r[9]),  // 帳單月覆蓋（延期；''=照消費日；容錯：試算表可能把 'yyyy-MM' 存成日期）
+      party: (r[10] == null) ? '' : String(r[10]).trim()   // 對象（分帳/代墊）
     };
   }).filter(x => x.type).reverse();
 }
@@ -414,6 +423,87 @@ function getBalances() {
     }
   });
   return { balances: list, networth: networth };
+}
+
+/* ===== 代墊 / 分帳 ===== */
+
+/** 確保帳戶表有「代墊款」資產帳戶（沒有就在帳戶表末尾補一列） */
+function ensureSplitAccount_(cfg) {
+  const n = Math.max(cfg.getLastRow() - 5, 1);
+  const names = cfg.getRange(6, 1, n, 1).getValues().map(r => String(r[0]).trim());
+  if (names.indexOf(SPLIT_ACCT) >= 0) return;
+  let lastRow = 5;
+  for (let i = 0; i < names.length; i++) if (names[i] !== '') lastRow = 6 + i;
+  cfg.getRange(lastRow + 1, 1, 1, 4).setValues([[SPLIT_ACCT, '代墊', '資產', 0]]);
+}
+
+/** 確保設定分頁有「分帳對象」名單區塊(M 欄)；使用者在 M6 往下自行加人名 */
+function ensurePartySection_(cfg) {
+  if (cfg.getRange('M4').getValue()) return;
+  cfg.getRange('M4').setValue('分帳對象').setFontWeight('bold').setFontColor(COLORS.sectionText).setFontSize(12);
+  cfg.getRange('M5').setValue('（在下面一列一個名字；記帳分帳時可下拉選）')
+     .setFontColor(COLORS.muted).setFontSize(10);
+  cfg.setColumnWidth(12, 28);
+  cfg.setColumnWidth(13, 120);
+  cfg.getRange(4, 13, 30, 1).setFontFamily('Noto Sans TC');
+}
+
+/** 代墊往來：各對象目前還欠你多少（別人欠你為正）。掃所有月份分頁的「代墊款」轉帳。 */
+function getSettlements() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const monthRe = /^\d{4}-\d{2}$/;
+  const owed = {}, last = {};
+  ss.getSheets().forEach(sh => {
+    if (!monthRe.test(sh.getName())) return;
+    readTxns_(sh).forEach(t => {
+      if (t.type !== '轉帳') return;
+      const p = (t.party || '').trim(); if (!p) return;
+      if (t.accountIn === SPLIT_ACCT) {          // 代墊：別人欠你增加
+        owed[p] = (owed[p] || 0) + t.amount;
+        if (!last[p] || t.date > last[p].date) last[p] = { date: t.date, category: t.category };
+      } else if (t.accountOut === SPLIT_ACCT) {  // 還款：欠款減少
+        owed[p] = (owed[p] || 0) - t.amount;
+      }
+    });
+  });
+  const listAll = Object.keys(owed).map(p => ({ party: p, owed: owed[p], last: last[p] || null }));
+  const list = listAll.filter(x => Math.round(x.owed) !== 0).sort((a, b) => b.owed - a.owed);
+  let total = 0; list.forEach(x => total += x.owed);
+  return { list: list, total: total };
+}
+
+/** 記一筆分帳：p = {date, account(出帳/你先付的), category, note, myShare, parts:[{party,amount}...]}。
+ *  產生：我的份→支出；每個對象→一筆轉帳(出帳→代墊款、標對象)。統計只會算到「我的份」。 */
+function addSplit(p) {
+  const total = Number(p.total);
+  const myShare = Number(p.myShare) || 0;
+  const parts = (p.parts || [])
+    .filter(x => x.party && Number(x.amount) > 0)
+    .map(x => ({ party: String(x.party).trim(), amount: Number(x.amount) }));
+  const sumParts = parts.reduce((s, x) => s + x.amount, 0);
+  if (!(total > 0)) throw new Error('總額需大於 0');
+  if (!p.account) throw new Error('缺少出帳帳戶');
+  if (Math.round(myShare + sumParts) !== Math.round(total)) throw new Error('我的份＋分給別人 必須等於總額');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSplitAccount_(ss.getSheetByName(CFG_SHEET));
+  if (myShare > 0) {
+    addTransaction({ type: '支出', amount: myShare, date: p.date, accountOut: p.account, accountIn: '', category: p.category || '', note: p.note || '' });
+  }
+  parts.forEach(x => {
+    addTransaction({ type: '轉帳', amount: x.amount, date: p.date, accountOut: p.account, accountIn: SPLIT_ACCT, category: '代墊', note: p.note || '', party: x.party });
+  });
+  return { ok: true };
+}
+
+/** 記錄某對象還款：轉帳 代墊款 → 你的帳戶(account)，標同一對象，欠款往下扣 */
+function settleParty(party, account, amount) {
+  const amt = Number(amount);
+  if (!party) throw new Error('缺少對象');
+  if (!(amt > 0)) throw new Error('金額需大於 0');
+  if (!account) throw new Error('缺少入帳帳戶');
+  addTransaction({ type: '轉帳', amount: amt, date: '', accountOut: SPLIT_ACCT, accountIn: account, category: '代墊還款', note: '', party: party });
+  return { ok: true };
 }
 
 /* ===== 信用卡帳單週期 ===== */
@@ -704,6 +794,7 @@ function updateRow(oldMonth, row, t) {
 
   const created = oldSh.getRange(row, CREATED_COL).getValue() || new Date();
   const billYm = billStr_(oldSh.getRange(row, BILL_COL).getValue());   // 保留延期標記（容錯還原成 yyyy-MM）
+  const party = String(oldSh.getRange(row, PARTY_COL).getValue() || '').trim();   // 保留對象
   const dateObj = parseDate_(t.date);
   const newMonth = Utilities.formatDate(dateObj, TZ, 'yyyy-MM');
   const rowVals = [
@@ -716,7 +807,8 @@ function updateRow(oldMonth, row, t) {
     t.note || '',
     created,
     famPct_(t),
-    billYm
+    billYm,
+    party
   ];
 
   if (newMonth === oldMonth) {
