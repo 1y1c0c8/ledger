@@ -496,13 +496,27 @@ function addSplit(p) {
   return { ok: true };
 }
 
-/** 記錄某對象還款：轉帳 代墊款 → 你的帳戶(account)，標同一對象，欠款往下扣 */
-function settleParty(party, account, amount) {
+/** 某對象目前還欠你多少（別人欠你為正） */
+function partyOwed_(party) {
+  const hit = getSettlements().list.find(x => x.party === party);
+  return hit ? hit.owed : 0;
+}
+
+/** 記錄某對象還款：清欠款的部分→轉帳(代墊款→你的帳戶)；超過欠款的部分(找零/跑腿費)→一筆收入 */
+function settleParty(party, account, amount, excessCat) {
   const amt = Number(amount);
   if (!party) throw new Error('缺少對象');
   if (!(amt > 0)) throw new Error('金額需大於 0');
   if (!account) throw new Error('缺少入帳帳戶');
-  addTransaction({ type: '轉帳', amount: amt, date: '', accountOut: SPLIT_ACCT, accountIn: account, category: '代墊還款', note: '', party: party });
+  const owed = partyOwed_(party);
+  const settle = Math.max(0, Math.min(amt, owed));   // 用來清欠款的部分
+  const excess = amt - settle;                        // 多出的部分（找零/跑腿費）
+  if (settle > 0) {
+    addTransaction({ type: '轉帳', amount: settle, date: '', accountOut: SPLIT_ACCT, accountIn: account, category: '代墊還款', note: '', party: party });
+  }
+  if (excess > 0) {
+    addTransaction({ type: '收入', amount: excess, date: '', accountOut: '', accountIn: account, category: excessCat || '其他收入', note: '代墊找零/跑腿費·' + party });
+  }
   return { ok: true };
 }
 

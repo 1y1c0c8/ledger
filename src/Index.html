@@ -853,6 +853,7 @@
       const d=SETTLE;
       $('settleTotal').textContent = fmt(d.total);
       const assetOpts = opts(CONFIG.accounts.filter(a=>a.type==='資產' && a.name!==CONFIG.splitAcct));
+      const incomeOpts = opts(CONFIG.categories.filter(c=>c.kind==='收入'));
       $('settleList').innerHTML = d.list.length ? d.list.map((x,i)=>`
         <div class="row"><div class="mid"><div class="t1">${x.party}</div>
           <div class="t2">${x.last?x.last.category+' · '+x.last.date.slice(5):''}</div></div>
@@ -860,20 +861,30 @@
           <span class="pill" onclick="$('sf${i}').classList.toggle('hide')">記錄還款</span></div></div>
         <div class="hide" id="sf${i}" style="padding:2px 14px 12px">
           <div style="display:flex;align-items:center;gap:8px">
-            <input type="number" inputmode="numeric" id="sfamt${i}" value="${Math.round(x.owed)}"
+            <input type="number" inputmode="numeric" id="sfamt${i}" value="${Math.round(x.owed)}" oninput="onSettleAmt(${i},${Math.round(x.owed)})"
                    style="width:96px;text-align:right;border:1px solid var(--line);border-radius:8px;padding:6px;font-weight:700">
             <span class="t2" style="color:var(--muted)">進</span>
             <select id="sfacc${i}" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:6px">${assetOpts}</select>
           </div>
+          <div class="hide" id="sfex${i}" style="margin-top:6px;display:flex;align-items:center;gap:8px">
+            <span class="t2" id="sfexlbl${i}" style="color:var(--muted);white-space:nowrap">多出 記為</span>
+            <select id="sfexcat${i}" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:6px">${incomeOpts}</select>
+          </div>
           <button class="sheet-btn primary" style="margin-top:6px" onclick="doSettle(${i})">確認還款</button>
         </div>`).join('') : '<div class="empty">目前沒有人欠你代墊款</div>';
     }
+    function onSettleAmt(i, owed){
+      const ex=(parseFloat($('sfamt'+i).value)||0)-owed;
+      if(ex>0){ $('sfexlbl'+i).textContent=`多出 ${fmt(ex)} 記為`; show('sfex'+i, true); }
+      else show('sfex'+i, false);
+    }
     function doSettle(i){
       const x=SETTLE.list[i];
+      const excat = $('sfex'+i).classList.contains('hide') ? '' : $('sfexcat'+i).value;
       google.script.run.withSuccessHandler(r=>{
         if(r&&r.ok===false){ toast(r.msg||'失敗'); return; }
         toast('已記錄還款 ✓'); openSettlements(); reloadAll();
-      }).withFailureHandler(err).settleParty(x.party, $('sfacc'+i).value, $('sfamt'+i).value);
+      }).withFailureHandler(err).settleParty(x.party, $('sfacc'+i).value, $('sfamt'+i).value, excat);
     }
 
     // 帳戶 tab 提醒：上期待繳(含繳款日/剩幾天)＋ 即將結帳(提示核對金額/調整結帳日)
