@@ -71,6 +71,8 @@
     .pill{font-size:12px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--card);
       color:var(--muted);font-weight:700;font-family:"Noto Sans TC";cursor:pointer}
     .pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .plus{width:26px;height:26px;flex:none;border-radius:999px;border:1px solid var(--line);background:var(--card);
+      color:var(--accent);font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 
     .save{position:fixed;left:0;right:0;bottom:0;z-index:30;
       padding:12px 16px max(14px,env(safe-area-inset-bottom));
@@ -184,11 +186,17 @@
         </div>
         <div class="field hide" id="fOut">
           <label id="fOutLabel">出帳帳戶</label>
-          <select id="accountOut"></select>
+          <span style="flex:1;display:flex;gap:8px;align-items:center">
+            <select id="accountOut" style="flex:1"></select>
+            <span class="plus" onclick="openAddAccount('accountOut')">＋</span>
+          </span>
         </div>
         <div class="field hide" id="fIn">
           <label id="fInLabel">入帳帳戶</label>
-          <select id="accountIn"></select>
+          <span style="flex:1;display:flex;gap:8px;align-items:center">
+            <select id="accountIn" style="flex:1"></select>
+            <span class="plus" onclick="openAddAccount('accountIn')">＋</span>
+          </span>
         </div>
         <div class="field" id="fCat">
           <label>項目類別</label>
@@ -410,6 +418,29 @@
     </div>
   </div>
 
+  <!-- ===== 新增帳戶／付款方式（浮層）===== -->
+  <div class="overlay" id="acctSheet" onclick="if(event.target===this)closeSheets()">
+    <div class="sheet">
+      <div class="grip"></div>
+      <div class="sheet-title">新增帳戶／付款方式</div>
+      <div class="card">
+        <div class="field" style="border-top:0"><label>名稱</label>
+          <input type="text" id="acctName" placeholder="例如 悠遊卡、玉山銀行" maxlength="20"></div>
+        <div class="field" style="flex-direction:column;align-items:stretch;gap:8px">
+          <label>類型</label>
+          <div class="seg" id="acctTypeSeg" style="margin:0;box-shadow:none">
+            <button data-t="資產" class="active" onclick="pickAcctType('資產')">資產</button>
+            <button data-t="負債" onclick="pickAcctType('負債')">負債(卡)</button>
+            <button data-t="外部" onclick="pickAcctType('外部')">外部</button>
+          </div>
+        </div>
+      </div>
+      <div class="t2" style="color:var(--muted);margin:8px 2px">期初餘額預設 0；要設起始金額可到「設定」分頁改。</div>
+      <button class="sheet-btn primary" onclick="doAddAccount()">加入</button>
+      <button class="sheet-btn cancel" onclick="closeSheets()">取消</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -420,6 +451,7 @@
     let GRAN = 'month', STATKEY = null, PIEKIND = '支出', PIEACCT = '__all__';
     let PAYFAM = 0, EPAYFAM = 0;            // 付款方：家裡負擔%（記帳表單 / 編輯視窗）
     let SPLITON = false, SETTLE = null;     // 分帳模式 / 代墊往來資料
+    let ADDACCT_TARGET = 'accountOut', ACCTTYPE = '資產';   // 就地新增帳戶
     let STMTCARD = null, STMTYM = null, STMT = null;   // 卡片帳單頁狀態
     const PAGE = 15;                       // 統計明細一次顯示筆數
     let statShown = PAGE;
@@ -491,6 +523,39 @@
     // ---- 付款方（信用卡支出才出現）----
     function isLiability(name){ const a = CONFIG && CONFIG.accounts.find(x=>x.name===name); return !!a && a.type==='負債'; }
     function updatePayVis(){ show('fPay', !SPLITON && TYPE==='支出' && isLiability($('accountOut').value)); }
+
+    // ---- 就地新增帳戶／付款方式 ----
+    function openAddAccount(target){
+      ADDACCT_TARGET=target; ACCTTYPE='資產'; $('acctName').value='';
+      document.querySelectorAll('#acctTypeSeg button').forEach(b=>b.classList.toggle('active', b.dataset.t==='資產'));
+      $('acctSheet').classList.add('show');
+    }
+    function pickAcctType(t){ ACCTTYPE=t; document.querySelectorAll('#acctTypeSeg button').forEach(b=>b.classList.toggle('active', b.dataset.t===t)); }
+    function rebuildAccountSelects(){
+      const noSplit=a=>a.name!==CONFIG.splitAcct;
+      const assets=CONFIG.accounts.filter(a=>a.type==='資產'&&noSplit(a));
+      const payFrom=CONFIG.accounts.filter(a=>(a.type==='資產'||a.type==='負債')&&noSplit(a));
+      const allReal=CONFIG.accounts.filter(noSplit);
+      const outV=$('accountOut').value, inV=$('accountIn').value;
+      if(TYPE==='支出'){ $('accountOut').innerHTML=opts(payFrom); }
+      else if(TYPE==='收入'){ $('accountIn').innerHTML=opts(assets); }
+      else { $('accountOut').innerHTML=opts(allReal); $('accountIn').innerHTML=opts(allReal); }
+      if([].slice.call($('accountOut').options).some(o=>o.value===outV)) $('accountOut').value=outV;
+      if([].slice.call($('accountIn').options).some(o=>o.value===inV)) $('accountIn').value=inV;
+    }
+    function doAddAccount(){
+      const name=$('acctName').value.trim();
+      if(!name){ toast('請輸入名稱'); return; }
+      google.script.run.withSuccessHandler(r=>{
+        if(r && r.ok===false){ toast(r.msg||'失敗'); return; }
+        CONFIG.accounts = r.accounts || CONFIG.accounts;
+        rebuildAccountSelects();
+        const sel=$(ADDACCT_TARGET);
+        if([].slice.call(sel.options).some(o=>o.value===name)) sel.value=name;
+        updatePayVis();
+        closeSheets(); toast(r.dup?'已有這個帳戶':'已新增帳戶');
+      }).withFailureHandler(err).addAccount(name, ACCTTYPE);
+    }
     function setPay(v){
       const split = v==='split';
       show('paySplit', split);
@@ -975,6 +1040,7 @@
       $('editModal').classList.remove('show');
       $('stmtSheet').classList.remove('show');
       $('settleSheet').classList.remove('show');
+      $('acctSheet').classList.remove('show');
     }
 
     function doDelete(){

@@ -537,6 +537,24 @@ function addParty(name) {
   return { ok: true, parties: readList().filter(x => x !== '') };
 }
 
+/** App 內新增帳戶／付款方式：寫進設定分頁帳戶表(A~D)，期初餘額 0；回傳更新後帳戶清單 */
+function addAccount(name, type) {
+  name = String(name || '').trim();
+  type = String(type || '資產').trim();
+  if (!name) return { ok: false, msg: '請輸入名稱' };
+  if (['資產', '負債', '外部'].indexOf(type) < 0) type = '資產';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cfg = ss.getSheetByName(CFG_SHEET);
+  const n = Math.max(cfg.getLastRow() - 5, 1);
+  const names = cfg.getRange(6, 1, n, 1).getValues().map(r => String(r[0]).trim());
+  if (names.indexOf(name) >= 0) return { ok: true, dup: true, accounts: getConfig().accounts };
+  let lastRow = 5;
+  for (let i = 0; i < names.length; i++) if (names[i] !== '') lastRow = 6 + i;
+  const group = type === '負債' ? '信用卡' : (type === '外部' ? '外部' : '其他');
+  cfg.getRange(lastRow + 1, 1, 1, 4).setValues([[name, group, type, 0]]);
+  return { ok: true, accounts: getConfig().accounts };
+}
+
 /* ===== 信用卡帳單週期 ===== */
 
 const PAY_TAG = '繳款·';   // 繳款轉帳的 note 前綴，後接該期結帳日(yyyy-MM-dd)，用來判定「已繳」
