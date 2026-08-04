@@ -555,6 +555,21 @@ function addAccount(name, type) {
   return { ok: true, accounts: getConfig().accounts };
 }
 
+/** 依前端給的名稱順序重排帳戶表(A~D)：orderedNames 內的先、依序排前面，其餘(如外部)保持原相對順序接在後面 */
+function reorderAccounts(orderedNames) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cfg = ss.getSheetByName(CFG_SHEET);
+  const n = Math.max(cfg.getLastRow() - 5, 1);
+  const rows = cfg.getRange(6, 1, n, 4).getValues().filter(r => String(r[0]).trim() !== '');
+  const byName = {};
+  rows.forEach(r => byName[String(r[0]).trim()] = r);
+  const out = [];
+  (orderedNames || []).forEach(nm => { if (byName[nm]) { out.push(byName[nm]); delete byName[nm]; } });
+  rows.forEach(r => { const nm = String(r[0]).trim(); if (byName[nm]) { out.push(r); delete byName[nm]; } });
+  if (out.length) cfg.getRange(6, 1, out.length, 4).setValues(out);
+  return { ok: true, accounts: getConfig().accounts };
+}
+
 /* ===== 信用卡帳單週期 ===== */
 
 const PAY_TAG = '繳款·';   // 繳款轉帳的 note 前綴，後接該期結帳日(yyyy-MM-dd)，用來判定「已繳」
