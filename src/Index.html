@@ -180,6 +180,10 @@
         <span style="font-size:13px;color:var(--muted);font-weight:700">分帳（我先付、別人再還）</span>
         <span class="pill" id="splitPill" onclick="toggleSplit()">關</span>
       </div>
+      <div class="hide" id="fItemToggle" style="display:flex;justify-content:space-between;align-items:center;padding:0 4px;margin:-4px 0 12px">
+        <span style="font-size:13px;color:var(--muted);font-weight:700">分項（一次買不同類別）</span>
+        <span class="pill" id="itemPill" onclick="toggleItem()">關</span>
+      </div>
 
       <div class="card">
         <div class="amount-box">
@@ -244,6 +248,15 @@
             <span class="pill" onclick="newParty()">＋ 新對象</span>
           </span>
           <span id="splitLeft" style="font-weight:700;font-size:13px">未分配 0</span>
+        </div>
+      </div>
+
+      <div class="card hide" id="fItem">
+        <div style="padding:8px 16px 2px;font-size:12px;color:var(--muted)">分項（各自選類別＋金額）</div>
+        <div id="itemParts"></div>
+        <div style="padding:8px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span class="pill" onclick="addItemRow()">＋ 加一項</span>
+          <span id="itemLeft" style="font-weight:700;font-size:13px">未分配 0</span>
         </div>
       </div>
 
@@ -458,6 +471,7 @@
     let GRAN = 'month', STATKEY = null, PIEKIND = '支出', PIEACCT = '__all__';
     let PAYFAM = 0, EPAYFAM = 0;            // 付款方：家裡負擔%（記帳表單 / 編輯視窗）
     let SPLITON = false, SETTLE = null;     // 分帳模式 / 代墊往來資料
+    let ITEMON = false;                     // 分項模式（一筆多類別）
     let ADDACCT_TARGET = 'accountOut', ACCTTYPE = '資產';   // 就地新增帳戶
     let REORDER = false, ORDER = [];        // 帳戶排序編輯模式
     let STMTCARD = null, STMTYM = null, STMT = null;   // 卡片帳單頁狀態
@@ -535,13 +549,14 @@
       }
       updatePayVis();
       show('fSplitToggle', t==='支出');
-      if(t!=='支出') setSplit(false);
+      show('fItemToggle', t==='支出');
+      if(t!=='支出'){ setSplit(false); setItem(false); }
     }
     function show(id,on){$(id).classList.toggle('hide',!on);}
 
     // ---- 付款方（信用卡支出才出現）----
     function isLiability(name){ const a = CONFIG && CONFIG.accounts.find(x=>x.name===name); return !!a && a.type==='負債'; }
-    function updatePayVis(){ show('fPay', !SPLITON && TYPE==='支出' && isLiability($('accountOut').value)); }
+    function updatePayVis(){ show('fPay', !SPLITON && !ITEMON && TYPE==='支出' && isLiability($('accountOut').value)); }
 
     // ---- 就地新增帳戶／付款方式 ----
     function openAddAccount(target){
@@ -597,6 +612,7 @@
 
     function save(){
       if(SPLITON) return saveSplit();
+      if(ITEMON) return saveItems();
       const amt = parseFloat($('amount').value);
       if(!(amt>0)){toast('請輸入金額');return;}
       if(TYPE==='轉帳' && $('accountOut').value===$('accountIn').value){
@@ -627,6 +643,7 @@
       $('splitPill').classList.toggle('on', on);
       show('fSplit', on);
       $('amountLabel').textContent = on ? '總額' : '金額';
+      if(on && ITEMON) setItem(false);      // 分帳／分項互斥
       updatePayVis();                       // 分帳時付款方隱藏
       if(on && !$('splitParts').children.length) addPartRow();
       updateSplitLeft();
@@ -691,13 +708,64 @@
       }).withFailureHandler(e=>{ $('saveBtn').disabled=false; $('saveBtn').textContent='儲存'; err(e); }).addSplit(payload);
     }
 
+    // ---- 分項（一次買不同類別，合併成同一筆）----
+    function toggleItem(){ setItem(!ITEMON); }
+    function setItem(on){
+      ITEMON = on;
+      $('itemPill').textContent = on?'開':'關';
+      $('itemPill').classList.toggle('on', on);
+      show('fItem', on);
+      $('amountLabel').textContent = on ? '總額' : '金額';
+      if(TYPE==='支出') show('fCat', !on);   // 分項時隱藏單一類別
+      if(on && SPLITON) setSplit(false);      // 分帳／分項互斥
+      updatePayVis();
+      if(on && $('itemParts').children.length<2){ addItemRow(); addItemRow(); }
+      updateItemLeft();
+    }
+    function catOpts(){ return opts((CONFIG.categories||[]).filter(c=>c.kind==='支出')); }
+    function addItemRow(){
+      const div=document.createElement('div');
+      div.className='field'; div.style.cssText='justify-content:flex-start;gap:8px';
+      div.innerHTML=`<select class="icat" style="flex:1">${catOpts()}</select>
+        <input type="number" inputmode="numeric" class="iamt" placeholder="金額" oninput="updateItemLeft()"
+               style="width:96px;text-align:right;border:1px solid var(--line);border-radius:8px;padding:6px;font-weight:600">
+        <span onclick="this.closest('.field').remove();updateItemLeft()" style="color:var(--muted);cursor:pointer;font-size:18px">✕</span>`;
+      $('itemParts').appendChild(div);
+    }
+    function updateItemLeft(){
+      const total=parseFloat($('amount').value)||0;
+      let sum=0; document.querySelectorAll('#itemParts .iamt').forEach(i=>sum+=parseFloat(i.value)||0);
+      const left=Math.round(total-sum), el=$('itemLeft');
+      el.textContent = left===0?'未分配 0 ✓':(left>0?`未分配 ${fmt(left)}`:`超出 ${fmt(-left)}`);
+      el.style.color = left===0?'var(--income)':'var(--expense)';
+    }
+    function saveItems(){
+      const total=parseFloat($('amount').value);
+      if(!(total>0)){ toast('請輸入總額'); return; }
+      const items=[];
+      document.querySelectorAll('#itemParts .field').forEach(row=>{
+        const sel=row.querySelector('.icat'); const category=sel&&sel.value;
+        const amount=parseFloat(row.querySelector('.iamt').value)||0;
+        if(category && amount>0) items.push({category, amount});
+      });
+      if(items.length<2){ toast('分項至少兩項（否則用一般支出）'); return; }
+      if(Math.round(items.reduce((s,x)=>s+x.amount,0))!==Math.round(total)){ toast('各項加總要等於總額'); return; }
+      $('saveBtn').disabled=true; $('saveBtn').textContent='儲存中…';
+      const payload={ total, account:$('accountOut').value, note:$('note').value, date:$('date').value, items };
+      google.script.run.withSuccessHandler((res)=>{
+        $('amount').value=''; $('note').value=''; $('itemParts').innerHTML=''; $('date').value=nowLocalDT(); resetPay();
+        setItem(false); $('saveBtn').disabled=false; $('saveBtn').textContent='儲存';
+        toast('已記錄分項 ✓'); renderBubble(res && res.bubble); reloadAll();
+      }).withFailureHandler(e=>{ $('saveBtn').disabled=false; $('saveBtn').textContent='儲存'; err(e); }).addItems(payload);
+    }
+
     const TYPE_COLOR = {'支出':'var(--expense)','收入':'var(--income)','轉帳':'var(--transfer)'};
 
     // 一筆紀錄的列 HTML（記帳「本月最近」與統計「明細」共用）
     function rowHtml(t){
       const sign = t.type==='收入'?'+':(t.type==='支出'?'-':'');
       const label = t.type==='轉帳' ? `${t.accountOut} → ${t.accountIn}` : (t.category || t.type);
-      const sub = (t.note? t.note+' · ':'') + (t.type==='收入'?t.accountIn:(t.type==='支出'?t.accountOut:'轉帳'));
+      const sub = (t.note? t.note+' · ':'') + (t.type==='收入'?t.accountIn:(t.type==='支出'?t.accountOut:'轉帳')) + (t.group?' · 同筆':'');
       return `<div class="row tap" onclick="openActions('${t.sheet}',${t.row})">
         <span class="dot" style="background:${TYPE_COLOR[t.type]}"></span>
         <div class="mid"><div class="t1">${label}</div><div class="t2">${t.date.slice(5)} ${t.time} · ${sub}</div></div>
@@ -735,6 +803,12 @@
       google.script.run.withSuccessHandler(()=>{ loadStatement(STMTCARD, STMTYM); reloadAll(); })
         .withFailureHandler(err).setChargeBill(sheet, row, target);
     }
+    function toggleChargeGroup(group,checked){
+      const target = checked ? STMT.ym : nextYm(STMT.ym);
+      const list = STMT.txns.filter(t=>t.group===group).map(t=>({sheet:t.sheet, row:t.row}));
+      google.script.run.withSuccessHandler(()=>{ loadStatement(STMTCARD, STMTYM); reloadAll(); })
+        .withFailureHandler(err).setChargeBillMany(list, target);
+    }
     function renderStatement(st){
       $('stmtTitle').textContent = st.card + ' 帳單';
       $('stmtRange').textContent = st.closeDate ? `${st.start.slice(5)} – ${st.end.slice(5)}` : st.ym;
@@ -747,15 +821,28 @@
       $('stmtClose').value = st.closeDay||''; $('stmtDue').value = st.dueDay||'';
       const hint = (st.closeDate && st.txns.length)
         ? '<div class="t2" style="color:var(--muted);padding:8px 12px 2px">勾選＝計入本期；取消勾選＝延到下一期帳單</div>' : '';
-      $('stmtList').innerHTML = st.txns.length
-        ? hint + st.txns.map(t=>{
+      // 同一筆分項（相同 group）合併成一列，金額＝該筆銀行帳單金額
+      const units=[], gseen={};
+      st.txns.forEach(t=>{
+        if(t.group){
+          if(gseen[t.group]!=null){ units[gseen[t.group]].rows.push(t); return; }
+          gseen[t.group]=units.length; units.push({group:t.group, rows:[t]});
+        } else units.push({rows:[t]});
+      });
+      $('stmtList').innerHTML = units.length
+        ? hint + units.map(u=>{
+            const t=u.rows[0], amt=u.rows.reduce((s,r)=>s+r.amount,0);
             const cb = st.closeDate
-              ? `<input type="checkbox" ${t.inThisCycle?'checked':''} onchange="toggleCharge('${t.sheet}',${t.row},this.checked)" style="width:18px;height:18px;accent-color:var(--accent);flex:none">`
+              ? `<input type="checkbox" ${t.inThisCycle?'checked':''} onchange="${u.group?`toggleChargeGroup('${u.group}',this.checked)`:`toggleCharge('${t.sheet}',${t.row},this.checked)`}" style="width:18px;height:18px;accent-color:var(--accent);flex:none">`
               : '';
             const dim = t.inThisCycle?'':'opacity:.45';
-            return `<div class="row">${cb}<div class="mid"><div class="t1" style="${dim}">${t.category||'支出'}</div>
-              <div class="t2" style="${dim}">${t.date.slice(5)} ${t.time} · ${payerLabel(t.famPct)}${t.inThisCycle?'':' · 已延到下一期'}</div></div>
-              <div class="amt num neg" style="${dim}">-${fmt(t.amount)}</div></div>`;
+            const title = u.group
+              ? `${t.note||'分項'} <span style="font-weight:400;color:var(--muted);font-size:11px">${u.rows.length}項</span>`
+              : (t.category||'支出');
+            const detail = u.group ? ' · '+u.rows.map(r=>`${r.category} ${fmt(r.amount)}`).join('、') : '';
+            return `<div class="row">${cb}<div class="mid"><div class="t1" style="${dim}">${title}</div>
+              <div class="t2" style="${dim}">${t.date.slice(5)} ${t.time} · ${payerLabel(t.famPct)}${detail}${t.inThisCycle?'':' · 已延到下一期'}</div></div>
+              <div class="amt num neg" style="${dim}">-${fmt(amt)}</div></div>`;
           }).join('')
         : '<div class="empty">這期沒有刷卡</div>';
       $('stmtTotal').textContent = fmt(st.total);

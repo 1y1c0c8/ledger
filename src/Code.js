@@ -6,10 +6,11 @@
 
 const TZ = 'Asia/Taipei';
 const CFG_SHEET = '設定';
-const TXN_HEADERS = ['日期', '類型', '出帳帳戶', '入帳帳戶', '金額', '類別', '備註', '建立時間', '家裡負擔%', '帳單月', '對象'];
+const TXN_HEADERS = ['日期', '類型', '出帳帳戶', '入帳帳戶', '金額', '類別', '備註', '建立時間', '家裡負擔%', '帳單月', '對象', '群組'];
 const CREATED_COL = 8;   // 「建立時間」固定在第 8 欄（不可用 TXN_HEADERS.length，加欄後會跑掉）
 const BILL_COL = 10;     // 「帳單月」固定在第 10 欄（延期標記：'yyyy-MM'=延到該結帳月；空=照消費日）
 const PARTY_COL = 11;    // 「對象」固定在第 11 欄（分帳/代墊的對象人名）
+const GROUP_COL = 12;    // 「群組」固定在第 12 欄（同一筆分項共用；帳單頁合併顯示用）
 const SPLIT_ACCT = '代墊款';   // 代墊往來用的資產帳戶（別人先欠你的錢；算進淨資產）
 
 const COLORS = {
@@ -179,7 +180,7 @@ function styleMonthSheet_(sh) {
   sh.setFrozenColumns(1);
 
   // 欄寬
-  const W = [130, 64, 110, 110, 100, 90, 220, 140, 80, 80, 90];
+  const W = [130, 64, 110, 110, 100, 90, 220, 140, 80, 80, 90, 90];
   W.forEach((w, i) => sh.setColumnWidth(i + 1, w));
 
   // 格式
@@ -190,7 +191,7 @@ function styleMonthSheet_(sh) {
   sh.getRange('B2:B').setHorizontalAlignment('center');
 
   // 斑馬紋（不蓋到表頭）
-  sh.getRange('A2:K2000').applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+  sh.getRange('A2:L2000').applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
 
   // 用顏色標示交易類型
   const rule = (t, bg, fg) => SpreadsheetApp.newConditionalFormatRule()
@@ -202,7 +203,7 @@ function styleMonthSheet_(sh) {
     rule('轉帳', COLORS.transferBg, COLORS.transferFg)
   ]);
 
-  sh.getRange('A1:K2000').setFontFamily('Noto Sans TC');
+  sh.getRange('A1:L2000').setFontFamily('Noto Sans TC');
 }
 
 /** 給前端：帳戶、類別、可用月份 */
@@ -257,7 +258,8 @@ function addTransaction(t) {
     new Date(),
     famPct_(t),              // 家裡負擔%（只對刷卡支出有意義，其餘留空）
     '',                      // 帳單月（延期標記；新增時空白＝照消費日歸期）
-    t.party || ''            // 對象（分帳/代墊的人名）
+    t.party || '',           // 對象（分帳/代墊的人名）
+    t.group || ''            // 群組（同一筆分項共用）
   ]);
   const res = { ok: true, month: month };
   if (t.wantBubble) res.bubble = bubblesFor_([t.accountOut, t.accountIn]);   // 只在使用者直接記帳時算(內部呼叫不算，避免多次掃描)
@@ -285,7 +287,8 @@ function readTxns_(sh) {
       note: r[6],
       famPct: (r[8] === '' || r[8] == null) ? null : Number(r[8]),  // 家裡負擔%（null=未設/我全出）
       bill: billStr_(r[9]),  // 帳單月覆蓋（延期；''=照消費日；容錯：試算表可能把 'yyyy-MM' 存成日期）
-      party: (r[10] == null) ? '' : String(r[10]).trim()   // 對象（分帳/代墊）
+      party: (r[10] == null) ? '' : String(r[10]).trim(),  // 對象（分帳/代墊）
+      group: (r[11] == null) ? '' : String(r[11]).trim()   // 群組（同一筆分項）
     };
   }).filter(x => x.type).reverse();
 }
@@ -590,6 +593,36 @@ function reorderAccounts(orderedNames) {
   return { ok: true, accounts: getConfig().accounts };
 }
 
+/** 分項：一筆消費拆成多個類別（各成一筆支出、共用同一「群組」標記，帳單頁可合併）。
+ *  p = {date, account(出帳), note, total, items:[{category, amount}...]} */
+function addItems(p) {
+  const total = Number(p.total);
+  const items = (p.items || []).filter(x => x.category && Number(x.amount) > 0)
+    .map(x => ({ category: String(x.category).trim(), amount: Number(x.amount) }));
+  if (!(total > 0)) throw new Error('總額需大於 0');
+  if (!p.account) throw new Error('缺少出帳帳戶');
+  if (items.length < 2) throw new Error('分項至少兩項（否則用一般支出）');
+  if (Math.round(items.reduce((s, x) => s + x.amount, 0)) !== Math.round(total)) throw new Error('各項加總必須等於總額');
+  const g = 'g' + new Date().getTime();
+  items.forEach(x => {
+    addTransaction({ type: '支出', amount: x.amount, date: p.date, accountOut: p.account, accountIn: '', category: x.category, note: p.note || '', group: g });
+  });
+  return { ok: true, group: g, bubble: bubblesFor_([p.account]) };
+}
+
+/** 批次設定多筆的「帳單月」(延期)：list=[{sheet,row}...]。給帳單頁「同筆」整組延期用。 */
+function setChargeBillMany(list, billYm) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  (list || []).forEach(it => {
+    const sh = ss.getSheetByName(it.sheet);
+    if (sh && it.row >= 2 && it.row <= sh.getLastRow()) {
+      const cell = sh.getRange(it.row, BILL_COL);
+      cell.setNumberFormat('@'); cell.setValue(billYm || '');
+    }
+  });
+  return { ok: true };
+}
+
 /* ===== 信用卡帳單週期 ===== */
 
 const PAY_TAG = '繳款·';   // 繳款轉帳的 note 前綴，後接該期結帳日(yyyy-MM-dd)，用來判定「已繳」
@@ -879,6 +912,7 @@ function updateRow(oldMonth, row, t) {
   const created = oldSh.getRange(row, CREATED_COL).getValue() || new Date();
   const billYm = billStr_(oldSh.getRange(row, BILL_COL).getValue());   // 保留延期標記（容錯還原成 yyyy-MM）
   const party = String(oldSh.getRange(row, PARTY_COL).getValue() || '').trim();   // 保留對象
+  const group = String(oldSh.getRange(row, GROUP_COL).getValue() || '').trim();   // 保留群組
   const dateObj = parseDate_(t.date);
   const newMonth = Utilities.formatDate(dateObj, TZ, 'yyyy-MM');
   const rowVals = [
@@ -892,7 +926,8 @@ function updateRow(oldMonth, row, t) {
     created,
     famPct_(t),
     billYm,
-    party
+    party,
+    group
   ];
 
   if (newMonth === oldMonth) {
