@@ -304,6 +304,7 @@
   </div>
 
   <div class="save" id="saveBar">
+    <div id="lastBubble" class="card hide" style="text-align:center;font-size:13px;padding:8px 12px;margin-bottom:8px"></div>
     <button id="saveBtn" onclick="save()">儲存</button>
   </div>
 
@@ -468,6 +469,16 @@
 
     function cleanAmount(el){el.value = el.value.replace(/[^\d.]/g,'').replace(/(\..*)\./g,'$1');}
 
+    // 記完帳的常駐小提示：顯示剛用到帳戶的名稱＋餘額(信用卡→本期已刷)，方便核對＆檢查有沒有選錯帳戶
+    function renderBubble(arr){
+      const el=$('lastBubble');
+      if(!arr || !arr.length){ el.classList.add('hide'); return; }
+      el.innerHTML = '<span style="color:var(--muted)">剛記到 </span>' + arr.map(b=>
+        `<b>${b.name}</b> <span style="color:var(--muted)">${b.label}</span> <span class="num">${fmt(b.value)}</span>`
+      ).join('<span style="color:var(--muted)"> · </span>');
+      el.classList.remove('hide');
+    }
+
     // 給 datetime-local 用的「現在」字串：yyyy-MM-ddTHH:mm（當地時間）
     function nowLocalDT(){
       const d=new Date(), p=n=>String(n).padStart(2,'0');
@@ -594,10 +605,11 @@
         category:   (TYPE==='轉帳')?'轉帳':$('category').value
       };
       if(!$('fPay').classList.contains('hide')) t.famPct = PAYFAM;   // 只有刷卡支出才帶付款方
-      google.script.run.withSuccessHandler(()=>{
+      t.wantBubble = true;
+      google.script.run.withSuccessHandler((res)=>{
         $('amount').value=''; $('note').value=''; $('date').value=nowLocalDT(); resetPay();
         $('saveBtn').disabled=false; $('saveBtn').textContent='儲存';
-        toast('已記錄 ✓'); reloadAll();
+        toast('已記錄 ✓'); renderBubble(res && res.bubble); reloadAll();
       }).withFailureHandler(e=>{
         $('saveBtn').disabled=false; $('saveBtn').textContent='儲存'; err(e);
       }).addTransaction(t);
@@ -668,10 +680,10 @@
       $('saveBtn').disabled=true; $('saveBtn').textContent='儲存中…';
       const payload={ total, myShare:mine, account:$('accountOut').value, category:$('category').value,
         note:$('note').value, date:$('date').value, parts };
-      google.script.run.withSuccessHandler(()=>{
+      google.script.run.withSuccessHandler((res)=>{
         $('amount').value=''; $('note').value=''; $('myShare').value=''; $('splitParts').innerHTML=''; $('date').value=nowLocalDT();
         setSplit(false); $('saveBtn').disabled=false; $('saveBtn').textContent='儲存';
-        toast('已記錄分帳 ✓'); reloadAll();
+        toast('已記錄分帳 ✓'); renderBubble(res && res.bubble); reloadAll();
       }).withFailureHandler(e=>{ $('saveBtn').disabled=false; $('saveBtn').textContent='儲存'; err(e); }).addSplit(payload);
     }
 

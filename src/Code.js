@@ -259,7 +259,9 @@ function addTransaction(t) {
     '',                      // 帳單月（延期標記；新增時空白＝照消費日歸期）
     t.party || ''            // 對象（分帳/代墊的人名）
   ]);
-  return { ok: true, month: month };
+  const res = { ok: true, month: month };
+  if (t.wantBubble) res.bubble = bubblesFor_([t.accountOut, t.accountIn]);   // 只在使用者直接記帳時算(內部呼叫不算，避免多次掃描)
+  return res;
 }
 
 /** 讀某張月份分頁的所有交易，整理成前端用的物件陣列（最新在前） */
@@ -425,6 +427,24 @@ function getBalances() {
   return { balances: list, networth: networth };
 }
 
+/** 記完帳給前端的小提示：回傳這些帳戶記完後的「名稱＋餘額(信用卡→本期已刷)」 */
+function bubblesFor_(names) {
+  const bals = {}; getBalances_().forEach(b => bals[b.name] = b);
+  const cardCfg = getCardConfig();
+  const out = [];
+  (names || []).filter(Boolean).forEach(nm => {
+    const b = bals[nm]; if (!b) return;      // 外部帳戶不在 getBalances_ → 略過
+    if (b.type === '負債') {
+      const c = cardCfg[nm] || {};
+      if (c.close) out.push({ name: nm, label: '本期已刷', value: cardCurrentDue_(nm, c.close).due });
+      else out.push({ name: nm, label: '未繳', value: -b.balance });
+    } else {
+      out.push({ name: nm, label: '餘額', value: b.balance });
+    }
+  });
+  return out;
+}
+
 /* ===== 代墊 / 分帳 ===== */
 
 /** 確保帳戶表有「代墊款」資產帳戶（沒有就在帳戶表末尾補一列） */
@@ -493,7 +513,7 @@ function addSplit(p) {
   parts.forEach(x => {
     addTransaction({ type: '轉帳', amount: x.amount, date: p.date, accountOut: p.account, accountIn: SPLIT_ACCT, category: '代墊', note: p.note || '', party: x.party });
   });
-  return { ok: true };
+  return { ok: true, bubble: bubblesFor_([p.account]) };
 }
 
 /** 某對象目前還欠你多少（別人欠你為正） */
