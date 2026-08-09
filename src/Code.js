@@ -510,13 +510,41 @@ function addSplit(p) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   ensureSplitAccount_(ss.getSheetByName(CFG_SHEET));
+  const g = 'g' + new Date().getTime();   // 同一次結帳共用 group，刷卡帳單頁可合併成一列＝銀行金額
   if (myShare > 0) {
-    addTransaction({ type: '支出', amount: myShare, date: p.date, accountOut: p.account, accountIn: '', category: p.category || '', note: p.note || '' });
+    addTransaction({ type: '支出', amount: myShare, date: p.date, accountOut: p.account, accountIn: '', category: p.category || '', note: p.note || '', group: g });
   }
   parts.forEach(x => {
-    addTransaction({ type: '轉帳', amount: x.amount, date: p.date, accountOut: p.account, accountIn: SPLIT_ACCT, category: '代墊', note: p.note || '', party: x.party });
+    addTransaction({ type: '轉帳', amount: x.amount, date: p.date, accountOut: p.account, accountIn: SPLIT_ACCT, category: '代墊', note: p.note || '', party: x.party, group: g });
   });
-  return { ok: true, bubble: bubblesFor_([p.account]) };
+  return { ok: true, group: g, bubble: bubblesFor_([p.account]) };
+}
+
+/** 分帳＋分項併用：一次結帳同時「我的份分類別」＋「分給別人(代墊)」，全部共用同一 group。
+ *  p = {date, account(出帳), note, total, items:[{category,amount}], parts:[{party,amount}]} */
+function addSplitItems(p) {
+  const total = Number(p.total);
+  const items = (p.items || []).filter(x => x.category && Number(x.amount) > 0)
+    .map(x => ({ category: String(x.category).trim(), amount: Number(x.amount) }));
+  const parts = (p.parts || []).filter(x => x.party && Number(x.amount) > 0)
+    .map(x => ({ party: String(x.party).trim(), amount: Number(x.amount) }));
+  if (!(total > 0)) throw new Error('總額需大於 0');
+  if (!p.account) throw new Error('缺少出帳帳戶');
+  if (items.length < 1) throw new Error('請填我的份（至少一個類別）');
+  if (parts.length < 1) throw new Error('請至少分給一個人');
+  const sum = items.reduce((s, x) => s + x.amount, 0) + parts.reduce((s, x) => s + x.amount, 0);
+  if (Math.round(sum) !== Math.round(total)) throw new Error('我的份＋分給別人 必須等於總額');
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSplitAccount_(ss.getSheetByName(CFG_SHEET));
+  const g = 'g' + new Date().getTime();
+  items.forEach(x => {
+    addTransaction({ type: '支出', amount: x.amount, date: p.date, accountOut: p.account, accountIn: '', category: x.category, note: p.note || '', group: g });
+  });
+  parts.forEach(x => {
+    addTransaction({ type: '轉帳', amount: x.amount, date: p.date, accountOut: p.account, accountIn: SPLIT_ACCT, category: '代墊', note: p.note || '', party: x.party, group: g });
+  });
+  return { ok: true, group: g, bubble: bubblesFor_([p.account]) };
 }
 
 /** 某對象目前還欠你多少（別人欠你為正） */
@@ -707,17 +735,23 @@ function cardCycleData_(card, closeDay, ym) {
   const cyc = cycleByCloseMonth_(closeDay, yy, mm - 1);
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const checked = [], deferred = [];
-  let total = 0, mine = 0, fam = 0;
+  let total = 0, mine = 0, fam = 0, front = 0;
   monthsBetween_(addMonths_(ym, -3) + '-01', cyc.end).forEach(name => {   // 往前 3 個月，涵蓋延期進來的
     const sh = ss.getSheetByName(name); if (!sh) return;
     readTxns_(sh).forEach(t => {
-      if (t.type !== '支出' || t.accountOut !== card) return;
+      if (t.accountOut !== card) return;
+      const isExpense = t.type === '支出';
+      const isFront = t.type === '轉帳' && t.accountIn === SPLIT_ACCT;   // 刷這張卡幫別人代墊
+      if (!isExpense && !isFront) return;
       const nat = naturalCloseMonth_(t.date, closeDay);
       const eff = t.bill || nat;
       if (eff === ym) {
         checked.push(t);
-        const f = (t.famPct == null ? 0 : t.famPct) / 100;
-        total += t.amount; fam += t.amount * f; mine += t.amount * (1 - f);
+        total += t.amount;                        // 銀行會刷的全額（含代墊）
+        if (isExpense) {
+          const f = (t.famPct == null ? 0 : t.famPct) / 100;
+          fam += t.amount * f; mine += t.amount * (1 - f);
+        } else { front += t.amount; }             // 代墊：別人的，之後會還你
       } else if (nat === ym) {
         deferred.push(t);          // 自然屬本期、但被延到後面
       }
@@ -725,7 +759,7 @@ function cardCycleData_(card, closeDay, ym) {
   });
   const sortFn = (a, b) => (a.date + a.time < b.date + b.time ? 1 : -1);
   checked.sort(sortFn); deferred.sort(sortFn);
-  return { start: cyc.start, end: cyc.end, closeDate: cyc.closeDate, total: total, mine: mine, fam: fam, checked: checked, deferred: deferred };
+  return { start: cyc.start, end: cyc.end, closeDate: cyc.closeDate, total: total, mine: mine, fam: fam, front: front, checked: checked, deferred: deferred };
 }
 
 /** 本期(未結帳)應繳額（延期調整後） */
@@ -809,15 +843,18 @@ function getCardStatement(card, ym) {
     const start = Utilities.formatDate(new Date(year, monthIdx, 1, 12, 0, 0), TZ, 'yyyy-MM-dd');
     const end = Utilities.formatDate(new Date(year, monthIdx + 1, 0, 12, 0, 0), TZ, 'yyyy-MM-dd');
     const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ymOut);
-    let txns = [], total = 0, mine = 0, fam = 0;
+    let txns = [], total = 0, mine = 0, fam = 0, front = 0;
     if (sh) readTxns_(sh).forEach(t => {
-      if (t.type === '支出' && t.accountOut === card) {
-        txns.push(Object.assign({ inThisCycle: true }, t));
-        const f = (t.famPct == null ? 0 : t.famPct) / 100;
-        total += t.amount; fam += t.amount * f; mine += t.amount * (1 - f);
-      }
+      if (t.accountOut !== card) return;
+      const isExpense = t.type === '支出';
+      const isFront = t.type === '轉帳' && t.accountIn === SPLIT_ACCT;
+      if (!isExpense && !isFront) return;
+      txns.push(Object.assign({ inThisCycle: true }, t));
+      total += t.amount;
+      if (isExpense) { const f = (t.famPct == null ? 0 : t.famPct) / 100; fam += t.amount * f; mine += t.amount * (1 - f); }
+      else { front += t.amount; }
     });
-    return { card: card, closeDay: 0, dueDay: dueDay, closeDate: '', dueDate: '', start: start, end: end, ym: ymOut, txns: txns, total: total, mine: mine, fam: fam, paid: false, isClosed: false };
+    return { card: card, closeDay: 0, dueDay: dueDay, closeDate: '', dueDate: '', start: start, end: end, ym: ymOut, txns: txns, total: total, mine: mine, fam: fam, front: front, paid: false, isClosed: false };
   }
 
   const data = cardCycleData_(card, closeDay, ymOut);
@@ -827,7 +864,7 @@ function getCardStatement(card, ym) {
   return {
     card: card, closeDay: closeDay, dueDay: dueDay,
     closeDate: data.closeDate, dueDate: dueDate, start: data.start, end: data.end, ym: ymOut,
-    txns: txns, total: data.total, mine: data.mine, fam: data.fam,
+    txns: txns, total: data.total, mine: data.mine, fam: data.fam, front: data.front,
     paid: isCyclePaid_(card, ymOut), isClosed: !!(data.closeDate && data.closeDate < today)
   };
 }
@@ -853,8 +890,9 @@ function recordCardPayment(card, ym, mineAcct, famAcct, mineAmtIn, famAmtIn) {
   const payDate = st.dueDate || st.closeDate;
   // 金額以前端填的「銀行帳單實際金額」為準（沒填才用 App 估算）；
   // 與已記錄刷卡的差額會自然留在卡片累計餘額、滾到下一期，不必追入帳日。
-  const mineAmt = (mineAmtIn === '' || mineAmtIn == null) ? Math.round(st.mine) : Math.round(Number(mineAmtIn));
-  const famAmt = (famAmtIn === '' || famAmtIn == null) ? (Math.round(st.total) - Math.round(st.mine)) : Math.round(Number(famAmtIn));
+  // 預設：家裡＝家的份；我的＝其餘（含代墊的錢，我先付、之後別人還我）
+  const famAmt = (famAmtIn === '' || famAmtIn == null) ? Math.round(st.fam) : Math.round(Number(famAmtIn));
+  const mineAmt = (mineAmtIn === '' || mineAmtIn == null) ? (Math.round(st.total) - famAmt) : Math.round(Number(mineAmtIn));
   if (mineAmt <= 0 && famAmt <= 0) return { ok: false, msg: '金額需大於 0' };
   if (mineAmt > 0 && mineAcct) {
     addTransaction({ type: '轉帳', amount: mineAmt, date: payDate, accountOut: mineAcct, accountIn: card, category: '轉帳', note: note });
