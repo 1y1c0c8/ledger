@@ -73,6 +73,9 @@
     .pill.on{background:var(--accent);color:#fff;border-color:var(--accent)}
     .plus{width:26px;height:26px;flex:none;border-radius:999px;border:1px solid var(--line);background:var(--card);
       color:var(--accent);font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+    #lastBubble{background:var(--accent-soft)}                 /* 淡底，跟白色紀錄區分開 */
+    #lastBubble.flash{animation:bubbleflash .6s ease-out}      /* 每次記完刷新閃一下 */
+    @keyframes bubbleflash{from{background:#bcdfd5}to{background:var(--accent-soft)}}
 
     .save{position:fixed;left:0;right:0;bottom:0;z-index:30;
       padding:12px 16px max(14px,env(safe-area-inset-bottom));
@@ -477,6 +480,7 @@
         `<b>${b.name}</b> <span style="color:var(--muted)">${b.label}</span> <span class="num">${fmt(b.value)}</span>`
       ).join('<span style="color:var(--muted)"> · </span>');
       el.classList.remove('hide');
+      el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');   // 重觸發閃動
     }
 
     // 給 datetime-local 用的「現在」字串：yyyy-MM-ddTHH:mm（當地時間）
