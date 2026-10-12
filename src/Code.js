@@ -736,7 +736,8 @@ function cardCycleData_(card, closeDay, ym) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const checked = [], deferred = [];
   let total = 0, mine = 0, fam = 0, front = 0;
-  monthsBetween_(addMonths_(ym, -3) + '-01', cyc.end).forEach(name => {   // 往前 3 個月，涵蓋延期進來的
+  // 往前 3 個月(涵蓋被延後進來的)、往後 1 個月(涵蓋被往前拉進本期的)
+  monthsBetween_(addMonths_(ym, -3) + '-01', addMonths_(cyc.end.slice(0, 7), 1) + '-28').forEach(name => {
     const sh = ss.getSheetByName(name); if (!sh) return;
     readTxns_(sh).forEach(t => {
       if (t.accountOut !== card) return;
@@ -745,6 +746,7 @@ function cardCycleData_(card, closeDay, ym) {
       if (!isExpense && !isFront) return;
       const nat = naturalCloseMonth_(t.date, closeDay);
       const eff = t.bill || nat;
+      t.eff = eff;                                  // 這筆目前算在哪一期(供前端 stepper 判斷方向)
       if (eff === ym) {
         checked.push(t);
         total += t.amount;                        // 銀行會刷的全額（含代墊）
@@ -753,7 +755,7 @@ function cardCycleData_(card, closeDay, ym) {
           fam += t.amount * f; mine += t.amount * (1 - f);
         } else { front += t.amount; }             // 代墊：別人的，之後會還你
       } else if (nat === ym) {
-        deferred.push(t);          // 自然屬本期、但被延到後面
+        deferred.push(t);          // 自然屬本期、但被改到其他期
       }
     });
   });

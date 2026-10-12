@@ -144,6 +144,11 @@
     .overlay.show .sheet{transform:translateY(0)}
     .skel{background:var(--line);border-radius:8px;height:14px;animation:skelpulse 1.1s ease-in-out infinite}
     @keyframes skelpulse{0%,100%{opacity:.4}50%{opacity:.85}}
+    .billstep{display:flex;align-items:center;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex:none}
+    .bs-arr{width:26px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--accent);cursor:pointer;font-size:18px;user-select:none}
+    .bs-lbl{font-size:12px;padding:0 6px;border-left:1px solid var(--line);border-right:1px solid var(--line);min-width:52px;text-align:center;font-weight:700}
+    .bs-here{color:var(--accent)}
+    .bs-off{color:#b06a00}
     .grip{width:38px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 12px}
     .sheet-title{font-family:"Manrope";font-weight:800;font-size:17px;text-align:center;margin:2px 0 12px}
     .sheet-sum{text-align:center;padding:2px 0 14px}
@@ -851,16 +856,24 @@
       loadStatement(STMTCARD, `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`);
     }
     function nextYm(ym){ const [y,m]=ym.split('-').map(Number); const d=new Date(y,m,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
-    function toggleCharge(sheet,row,checked){
-      const target = checked ? STMT.ym : nextYm(STMT.ym);   // 勾＝本期；不勾＝延到下一期
-      google.script.run.withSuccessHandler(()=>{ loadStatement(STMTCARD, STMTYM); reloadAll(); })
-        .withFailureHandler(err).setChargeBill(sheet, row, target);
+    function prevYm(ym){ const [y,m]=ym.split('-').map(Number); const d=new Date(y,m-2,1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+    function billLabel(eff, ym){
+      if(eff===ym) return '本期';
+      return (eff>ym?'→ ':'← ') + (+eff.slice(5)) + '月';
     }
-    function toggleChargeGroup(group,checked){
-      const target = checked ? STMT.ym : nextYm(STMT.ym);
-      const list = STMT.txns.filter(t=>t.group===group).map(t=>({sheet:t.sheet, row:t.row}));
-      google.script.run.withSuccessHandler(()=>{ loadStatement(STMTCARD, STMTYM); reloadAll(); })
-        .withFailureHandler(err).setChargeBillMany(list, target);
+    // 把某筆（或整組同筆）搬到相鄰帳單期：delta=-1 上一期、+1 下一期
+    let STMTUNITS = [];
+    function moveUnit(i, delta){
+      const u = STMTUNITS[i]; if(!u) return;
+      const eff = u.rows[0].eff || STMT.ym;
+      const target = delta<0 ? prevYm(eff) : nextYm(eff);
+      const fin = ()=>{ loadStatement(STMTCARD, STMTYM); reloadAll(); };
+      if(u.group){
+        const list = u.rows.map(r=>({sheet:r.sheet, row:r.row}));
+        google.script.run.withSuccessHandler(fin).withFailureHandler(err).setChargeBillMany(list, target);
+      } else {
+        google.script.run.withSuccessHandler(fin).withFailureHandler(err).setChargeBill(u.rows[0].sheet, u.rows[0].row, target);
+      }
     }
     function renderStatement(st){
       $('stmtTitle').textContent = st.card + ' 帳單';
@@ -873,8 +886,8 @@
         + status + '</span>';
       $('stmtClose').value = st.closeDay||''; $('stmtDue').value = st.dueDay||'';
       const hint = (st.closeDate && st.txns.length)
-        ? '<div class="t2" style="color:var(--muted);padding:8px 12px 2px">勾選＝計入本期；取消勾選＝延到下一期帳單</div>' : '';
-      // 同一筆分項（相同 group）合併成一列，金額＝該筆銀行帳單金額
+        ? '<div class="t2" style="color:var(--muted);padding:8px 12px 2px">左邊 ‹ › 可把某筆搬到上一期／下一期帳單，對齊銀行入帳期</div>' : '';
+      // 同一筆分項／分帳（相同 group）合併成一列，金額＝該筆銀行帳單金額
       const units=[], gseen={};
       st.txns.forEach(t=>{
         if(t.group){
@@ -882,19 +895,22 @@
           gseen[t.group]=units.length; units.push({group:t.group, rows:[t]});
         } else units.push({rows:[t]});
       });
+      STMTUNITS = units;
       $('stmtList').innerHTML = units.length
-        ? hint + units.map(u=>{
-            const t=u.rows[0], amt=u.rows.reduce((s,r)=>s+r.amount,0);
-            const cb = st.closeDate
-              ? `<input type="checkbox" ${t.inThisCycle?'checked':''} onchange="${u.group?`toggleChargeGroup('${u.group}',this.checked)`:`toggleCharge('${t.sheet}',${t.row},this.checked)`}" style="width:18px;height:18px;accent-color:var(--accent);flex:none">`
+        ? hint + units.map((u,i)=>{
+            const t=u.rows[0], amt=u.rows.reduce((s,r)=>s+r.amount,0), eff=t.eff||st.ym;
+            const step = st.closeDate
+              ? `<div class="billstep"><span class="bs-arr" onclick="moveUnit(${i},-1)">‹</span>`
+                + `<span class="bs-lbl ${t.inThisCycle?'bs-here':'bs-off'}">${billLabel(eff, st.ym)}</span>`
+                + `<span class="bs-arr" onclick="moveUnit(${i},1)">›</span></div>`
               : '';
             const dim = t.inThisCycle?'':'opacity:.45';
             const title = u.group
               ? `${t.note||'同筆'} <span style="font-weight:400;color:var(--muted);font-size:11px">${u.rows.length}項</span>`
               : (t.category||'支出');
             const detail = u.group ? ' · '+u.rows.map(r=>`${(r.category==='代墊'&&r.party)?('代墊·'+r.party):r.category} ${fmt(r.amount)}`).join('、') : '';
-            return `<div class="row">${cb}<div class="mid"><div class="t1" style="${dim}">${title}</div>
-              <div class="t2" style="${dim}">${t.date.slice(5)} ${t.time} · ${payerLabel(t.famPct)}${detail}${t.inThisCycle?'':' · 已延到下一期'}</div></div>
+            return `<div class="row">${step}<div class="mid"><div class="t1" style="${dim}">${title}</div>
+              <div class="t2" style="${dim}">${t.date.slice(5)} ${t.time} · ${payerLabel(t.famPct)}${detail}${t.inThisCycle?'':' · 已改到 '+(+eff.slice(5))+'月'}</div></div>
               <div class="amt num neg" style="${dim}">-${fmt(amt)}</div></div>`;
           }).join('')
         : '<div class="empty">這期沒有刷卡</div>';
