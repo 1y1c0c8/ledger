@@ -142,6 +142,8 @@
       padding:8px 16px max(16px,env(safe-area-inset-bottom));
       transform:translateY(24px);transition:.2s}
     .overlay.show .sheet{transform:translateY(0)}
+    .skel{background:var(--line);border-radius:8px;height:14px;animation:skelpulse 1.1s ease-in-out infinite}
+    @keyframes skelpulse{0%,100%{opacity:.4}50%{opacity:.85}}
     .grip{width:38px;height:4px;border-radius:2px;background:var(--line);margin:8px auto 12px}
     .sheet-title{font-family:"Manrope";font-weight:800;font-size:17px;text-align:center;margin:2px 0 12px}
     .sheet-sum{text-align:center;padding:2px 0 14px}
@@ -824,10 +826,25 @@
     function payerLabel(fp){ return (fp==null||fp===0)?'我全出':(fp===100?'家全出':`拆${fp}%`); }
     function setSelDefault(id, name){ const s=$(id); if(s && [].slice.call(s.options).some(o=>o.value===name)) s.value=name; }
 
+    const STMT_SKEL = '<div style="padding:16px;display:flex;flex-direction:column;gap:12px">'
+      + '<div class="skel" style="width:55%"></div><div class="skel" style="width:85%"></div>'
+      + '<div class="skel" style="width:70%"></div><div class="skel" style="width:80%"></div></div>';
+    let STMTCACHE = {};
     function openStatement(card){ STMTCARD=card; STMTYM=null; loadStatement(card, null); }
     function loadStatement(card, ym){
-      google.script.run.withSuccessHandler(st=>{ STMT=st; STMTYM=st.ym; renderStatement(st); $('stmtSheet').classList.add('show'); })
-        .withFailureHandler(err).getCardStatement(card, ym);
+      const key = card + '|' + (ym || 'cur');
+      $('stmtSheet').classList.add('show');          // 立刻打開面板，先給回饋
+      const cached = STMTCACHE[key];
+      if(cached){ STMT=cached; STMTYM=cached.ym; renderStatement(cached); }   // 有上次資料就先秒顯示
+      else {                                          // 第一次開：顯示骨架、清掉舊數字
+        $('stmtTitle').textContent = card + ' 帳單';
+        $('stmtRange').textContent = '載入中…';
+        $('stmtMeta').innerHTML = ''; $('stmtList').innerHTML = STMT_SKEL;
+        $('stmtTotal').textContent = '…'; $('stmtSplit').textContent = ''; $('stmtPayWrap').innerHTML = '';
+      }
+      google.script.run.withSuccessHandler(st=>{ STMTCACHE[key]=st; STMTCACHE[card+'|'+st.ym]=st; STMT=st; STMTYM=st.ym; renderStatement(st); })
+        .withFailureHandler(e=>{ if(!cached) $('stmtList').innerHTML='<div class="empty">讀取失敗，請再試一次</div>'; err(e); })
+        .getCardStatement(card, ym);
     }
     function stmtNav(d){
       const [y,m]=STMTYM.split('-').map(Number); const dt=new Date(y, m-1+d, 1);
@@ -1084,8 +1101,16 @@
 
     // ---- 代墊往來 ----
     function openSettlements(){
-      google.script.run.withSuccessHandler(d=>{ SETTLE=d; renderSettlements(); $('settleSheet').classList.add('show'); })
-        .withFailureHandler(err).getSettlements();
+      $('settleSheet').classList.add('show');        // 立刻打開面板
+      if(SETTLE){ renderSettlements(); }             // 有上次資料先秒顯示
+      else {
+        $('settleTotal').textContent='…';
+        $('settleList').innerHTML='<div style="padding:16px;display:flex;flex-direction:column;gap:12px">'
+          +'<div class="skel" style="width:50%"></div><div class="skel" style="width:75%"></div><div class="skel" style="width:60%"></div></div>';
+      }
+      google.script.run.withSuccessHandler(d=>{ SETTLE=d; renderSettlements(); })
+        .withFailureHandler(e=>{ if(!SETTLE) $('settleList').innerHTML='<div class="empty">讀取失敗，請再試一次</div>'; err(e); })
+        .getSettlements();
     }
     function renderSettlements(){
       const d=SETTLE;
